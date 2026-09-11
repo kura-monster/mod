@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rula_KuraBot 管理画面</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>🛡️ Rula_KuraBot 管理画面</h1>
+  <div class="user-info">
+    <span id="username"></span>
+    <a href="/logout" class="logout-link">ログアウト</a>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-button active" data-tab="settings">設定</button>
+  <button class="tab-button" data-tab="stats">統計・ログ</button>
+</nav>
+
+<main>
+  <section id="tab-settings" class="tab-panel active">
+    <p class="hint">値を変更すると自動的に保存され、即座にボットへ反映されます(再起動不要)。</p>
+    <div id="settings-groups"></div>
+  </section>
+
+  <section id="tab-stats" class="tab-panel">
+    <div class="stats-controls">
+      <label>集計期間:
+        <select id="stats-days">
+          <option value="1">1日</option>
+          <option value="7" selected>7日</option>
+          <option value="30">30日</option>
+          <option value="90">90日</option>
+        </select>
+      </label>
+    </div>
+    <div id="stats-summary" class="stats-summary"></div>
+    <h2>直近のケース履歴</h2>
+    <table class="cases-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>種別</th>
+          <th>重大度</th>
+          <th>対象</th>
+          <th>実行者</th>
+          <th>理由</th>
+          <th>日時</th>
+        </tr>
+      </thead>
+      <tbody id="cases-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
