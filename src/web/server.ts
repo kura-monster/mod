@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import cookieSession from 'cookie-session';
 import { PermissionFlagsBits, type Client } from 'discord.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import session from 'express-session';
 import helmet from 'helmet';
 import { config } from '../config.js';
 import { getCasesSince, getOrCreatePersistedSessionSecret, getRecentCases } from '../data/db.js';
@@ -11,12 +11,16 @@ import { getEffectiveSettings, updateSettingByKey } from './configBridge.js';
 import { webConfig } from './config.js';
 import { SETTINGS_SCHEMA } from './settingsSchema.js';
 
-declare module 'express-session' {
-  interface SessionData {
-    userId?: string;
-    username?: string;
-    // OAuth2のログインCSRF対策用。/loginで発行し/callbackで一致を確認したら消す
-    oauthState?: string;
+// @types/cookie-session は CookieSessionObject をグローバル名前空間に宣言しているため、
+// 'declare module' ではなく 'declare global' 側でマージする必要がある
+declare global {
+  namespace CookieSessionInterfaces {
+    interface CookieSessionObject {
+      userId?: string;
+      username?: string;
+      // OAuth2のログインCSRF対策用。/loginで発行し/callbackで一致を確認したら消す
+      oauthState?: string;
+    }
   }
 }
 
@@ -24,7 +28,7 @@ const DISCORD_API = 'https://discord.com/api/v10';
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url));
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (req.session.userId) {
+  if (req.session?.userId) {
     next();
     return;
   }
@@ -58,24 +62,24 @@ export async function startWebPanel(client: Client): Promise<void> {
 
   app.use(helmet());
   app.use(express.json());
+  // サーバー側にセッションを持たない、署名付きCookieのみの方式(cookie-session)を採用。
+  // express-sessionの既定(MemoryStore)だとプロセス再起動でログイン状態が全て消え、
+  // 「認証しても認証しても弾かれる」原因になっていたため、再起動の影響を受けない構成にした。
   app.use(
-    session({
-      secret: sessionSecret,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: webConfig.baseUrl.startsWith('https://'),
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      },
+    cookieSession({
+      name: 'session',
+      keys: [sessionSecret],
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: webConfig.baseUrl.startsWith('https://'),
     }),
   );
 
   app.get('/login', (req, res) => {
     // OAuth2のログインCSRF(state固定)対策。/callbackで値が一致することを確認する
     const state = crypto.randomBytes(16).toString('hex');
-    req.session.oauthState = state;
+    if (req.session) req.session.oauthState = state;
 
     const params = new URLSearchParams({
       client_id: config.clientId,
@@ -90,11 +94,13 @@ export async function startWebPanel(client: Client): Promise<void> {
   app.get('/callback', async (req, res) => {
     const { code, state } = req.query;
 
-    if (typeof state !== 'string' || !req.session.oauthState || state !== req.session.oauthState) {
-      res.status(400).send('認証セッションが無効です(有効期限切れ、または不正なリクエストの可能性)。もう一度 /login からやり直してください。');
+    if (typeof state !== 'string' || !req.session?.oauthState || state !== req.session.oauthState) {
+      res
+        .status(400)
+        .send('認証セッションが無効です(有効期限切れ、または不正なリクエストの可能性)。もう一度 /login からやり直してください。');
       return;
     }
-    delete req.session.oauthState;
+    req.session.oauthState = undefined;
 
     if (typeof code !== 'string') {
       res.status(400).send('認証コードがありません。もう一度 /login からやり直してください。');
@@ -141,17 +147,10 @@ export async function startWebPanel(client: Client): Promise<void> {
         return;
       }
 
-      // セッション固定攻撃を避けるため、権限確認後にセッションIDを再発行してから認証情報を格納する
-      req.session.regenerate((error) => {
-        if (error) {
-          console.error('[web] セッションの再生成に失敗しました', error);
-          res.status(500).send('ログインに失敗しました。時間をおいて再度お試しください。');
-          return;
-        }
-        req.session.userId = user.id;
-        req.session.username = user.username;
-        res.redirect('/');
-      });
+      // cookie-sessionはCookieの中身がそのままセッションなので、内容を丸ごと入れ替えることで
+      // ログイン前のCookie値を無効化する(express-sessionのregenerate相当)
+      req.session = { userId: user.id, username: user.username };
+      res.redirect('/');
     } catch (error) {
       console.error('[web] OAuth2ログインに失敗しました', error);
       res.status(500).send('ログインに失敗しました。時間をおいて再度お試しください。');
@@ -159,11 +158,12 @@ export async function startWebPanel(client: Client): Promise<void> {
   });
 
   app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/login'));
+    req.session = null;
+    res.redirect('/login');
   });
 
   app.get('/api/me', requireAuth, (req, res) => {
-    res.json({ userId: req.session.userId, username: req.session.username });
+    res.json({ userId: req.session?.userId, username: req.session?.username });
   });
 
   app.get('/api/settings', requireAuth, (_req, res) => {
@@ -216,7 +216,7 @@ export async function startWebPanel(client: Client): Promise<void> {
   app.use(express.static(PUBLIC_DIR, { index: false }));
 
   app.get('/', (req, res) => {
-    if (!req.session.userId) {
+    if (!req.session?.userId) {
       res.redirect('/login');
       return;
     }
