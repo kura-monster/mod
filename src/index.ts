@@ -5,6 +5,7 @@ import { registerReadyEvent } from './events/ready.js';
 import { registerMemberEvents } from './events/memberEvents.js';
 import { registerInteractionEvent } from './events/interactionCreate.js';
 import { registerAutomodEvents } from './events/automodEvents.js';
+import { registerServerTagEvents } from './events/serverTagEvents.js';
 import { loadPersistedSettings } from './web/configBridge.js';
 import { startWebPanel } from './web/server.js';
 
@@ -30,6 +31,7 @@ registerReadyEvent(client);
 registerMemberEvents(client);
 registerInteractionEvent(client);
 registerAutomodEvents(client);
+registerServerTagEvents(client);
 
 // 管理画面で変更された設定(data/db.json)をAUTOMOD_*の初期値に上書きしてから起動する
 await loadPersistedSettings();
