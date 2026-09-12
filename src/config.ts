@@ -59,4 +59,11 @@ export const config = {
     moderate: optional('MOD_LOG_MODERATE_CHANNEL_ID'),
     severe: optional('MOD_LOG_SEVERE_CHANNEL_ID'),
   },
+
+  serverTag: {
+    // どのサーバーの鯖タグを見るか(未設定ならこのボットが動いているサーバー=GUILD_IDを対象にする)
+    guildId: optional('SERVER_TAG_GUILD_ID') ?? optional('GUILD_ID'),
+    // 鯖タグを着用しているメンバーに自動付与/非着用時に自動剥奪するロールID(未設定なら機能自体が無効)
+    roleId: optional('SERVER_TAG_ROLE_ID'),
+  },
 };

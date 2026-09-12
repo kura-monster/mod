@@ -64,6 +64,20 @@ npm start
 - `/invites` — サーバーの有効な招待リンク一覧(作成者・使用回数)を表示。招待作成スパム対策の確認用
 - `/automod-status` — 現在の `AUTOMOD_*` 設定値を一覧表示(設定変更はコマンドではなく環境変数で行う)
 
+## 鯖タグ(Server Tag)連動ロール
+
+Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバーのタグをプロフィールに
+表示しているメンバーに自動でロールを付与し、非表示にした/別サーバーのタグに変えた場合は
+自動で剥奪する([src/services/serverTagRole.ts](src/services/serverTagRole.ts))。
+
+- `SERVER_TAG_ROLE_ID` を設定すると機能が有効になる(未設定なら何もしない)
+- `SERVER_TAG_GUILD_ID` で「どのサーバーのタグを見るか」を指定できる。未設定なら `GUILD_ID`
+  (このボットが動いているサーバー自身)が対象になる
+- 反映タイミングは3つ
+  1. メンバー参加時(参加した時点で既にタグを着用していた場合に対応)
+  2. タグの着脱をリアルタイム検知(Discordの`userUpdate`イベント)
+  3. ボット起動時に対象サーバーの全メンバーを走査して不整合を是正(オフライン中の変更に対応)
+
 ## 自動検知(荒らし対策)
 
 `AUTOMOD_ENABLED=true`(既定)で有効になる。検知すると即座にメッセージ削除や
@@ -180,9 +194,13 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
 
 Manage Nicknames / Mute Members / Deafen Members / Moderate Members / Kick Members /
 Manage Channels / Manage Messages / Ban Members / Manage Server(ロックダウン・招待一覧取得用) /
-**View Audit Log(アンチNukeの実行者特定に必須)** に加え、Gateway Intent として
-`SERVER MEMBERS INTENT` と `MESSAGE CONTENT INTENT` を Developer Portalで有効化すること
-(`GuildInvites`インテントは特権インテントではないためコード側の設定のみで有効)。
+**View Audit Log(アンチNukeの実行者特定に必須)** / **Manage Roles(鯖タグ連動ロールの付与/剥奪に必須)**
+に加え、Gateway Intent として `SERVER MEMBERS INTENT` と `MESSAGE CONTENT INTENT` を
+Developer Portalで有効化すること(`GuildInvites`インテントは特権インテントではないため
+コード側の設定のみで有効)。
+
+なお鯖タグ連動ロールを機能させるには、Discordの権限階層の仕様上、**Botのロールを
+`SERVER_TAG_ROLE_ID`のロールより上位に配置する**必要がある(下位のままだと付与/剥奪が失敗する)。
 
 ## ディレクトリ構成
 

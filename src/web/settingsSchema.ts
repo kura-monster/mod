@@ -45,6 +45,22 @@ export const SETTINGS_SCHEMA: SettingField[] = [
     group: 'モデレーションログ',
   },
 
+  // --- 鯖タグ連動ロール ---
+  {
+    key: 'serverTag.guildId',
+    envVar: 'SERVER_TAG_GUILD_ID',
+    label: 'どのサーバーの鯖タグを見るか(未設定でGUILD_IDと同じ)',
+    type: 'string',
+    group: '鯖タグ連動ロール',
+  },
+  {
+    key: 'serverTag.roleId',
+    envVar: 'SERVER_TAG_ROLE_ID',
+    label: '鯖タグ着用者に自動付与/非着用時に自動剥奪するロールID',
+    type: 'role',
+    group: '鯖タグ連動ロール',
+  },
+
   // --- 自動検知 全体 ---
   { key: 'automod.enabled', envVar: 'AUTOMOD_ENABLED', label: '自動検知を有効にする', type: 'boolean', group: '自動検知 全体' },
   {
