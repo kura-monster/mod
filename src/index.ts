@@ -35,6 +35,6 @@ registerServerTagEvents(client);
 
 // 管理画面で変更された設定(data/db.json)をAUTOMOD_*の初期値に上書きしてから起動する
 await loadPersistedSettings();
-startWebPanel(client);
+await startWebPanel(client);
 
 client.login(config.token);

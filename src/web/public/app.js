@@ -3,6 +3,14 @@ const state = {
   values: {},
 };
 
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+// ケース履歴(reason/targetLabel等)はDiscordメッセージ内容やニックネームに由来し、
+// 荒らしが仕込んだHTML/JSが含まれ得るため、innerHTMLへ差し込む前に必ずエスケープする
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
+}
+
 function showToast(message, kind) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -166,9 +174,12 @@ async function loadSettings() {
   renderSettings();
 }
 
+const SEVERITY_LABELS = { minor: '軽度', moderate: '中度', severe: '重度' };
+
 function severityBadge(severity) {
-  const label = { minor: '軽度', moderate: '中度', severe: '重度' }[severity] ?? severity;
-  return `<span class="badge badge-${severity}">${label}</span>`;
+  // severityはCSSクラス名にそのまま使うため、既知の3値以外は安全な既定値へフォールバックする
+  const safeSeverity = Object.prototype.hasOwnProperty.call(SEVERITY_LABELS, severity) ? severity : 'moderate';
+  return `<span class="badge badge-${safeSeverity}">${escapeHtml(SEVERITY_LABELS[safeSeverity] ?? severity)}</span>`;
 }
 
 async function loadStats() {
@@ -191,13 +202,13 @@ async function loadStats() {
     .map(
       (c) => `
     <tr>
-      <td>#${c.id}</td>
-      <td>${c.action}</td>
+      <td>#${escapeHtml(c.id)}</td>
+      <td>${escapeHtml(c.action)}</td>
       <td>${severityBadge(c.severity)}</td>
-      <td>${c.targetLabel}</td>
-      <td>${c.moderatorTag}</td>
-      <td>${c.reason}</td>
-      <td>${new Date(c.timestamp).toLocaleString('ja-JP')}</td>
+      <td>${escapeHtml(c.targetLabel)}</td>
+      <td>${escapeHtml(c.moderatorTag)}</td>
+      <td>${escapeHtml(c.reason)}</td>
+      <td>${escapeHtml(new Date(c.timestamp).toLocaleString('ja-JP'))}</td>
     </tr>
   `,
     )

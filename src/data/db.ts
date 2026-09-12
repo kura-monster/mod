@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,4 +130,18 @@ export async function setSettingOverride(key: string, value: unknown): Promise<v
   const db = await load();
   db.settingsOverrides[key] = value;
   queueSave();
+}
+
+/**
+ * SESSION_SECRET が環境変数で指定されていない場合に使う署名鍵。
+ * プロセス再起動のたびに変えてしまうと管理画面のログインセッションが毎回無効になり
+ * 「認証しても認証しても弾かれる」状態になるため、初回生成した値をDBに永久保存して使い回す。
+ */
+export async function getOrCreatePersistedSessionSecret(): Promise<string> {
+  const db = await load();
+  if (!db.sessionSecret) {
+    db.sessionSecret = crypto.randomBytes(32).toString('hex');
+    queueSave();
+  }
+  return db.sessionSecret;
 }

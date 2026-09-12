@@ -1,10 +1,12 @@
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PermissionFlagsBits, type Client } from 'discord.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import session from 'express-session';
+import helmet from 'helmet';
 import { config } from '../config.js';
-import { getRecentCases, getCasesSince } from '../data/db.js';
+import { getCasesSince, getOrCreatePersistedSessionSecret, getRecentCases } from '../data/db.js';
 import { getEffectiveSettings, updateSettingByKey } from './configBridge.js';
 import { webConfig } from './config.js';
 import { SETTINGS_SCHEMA } from './settingsSchema.js';
@@ -13,6 +15,8 @@ declare module 'express-session' {
   interface SessionData {
     userId?: string;
     username?: string;
+    // OAuth2のログインCSRF対策用。/loginで発行し/callbackで一致を確認したら消す
+    oauthState?: string;
   }
 }
 
@@ -27,7 +31,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   res.status(401).json({ error: '認証が必要です' });
 }
 
-export function startWebPanel(client: Client): void {
+export async function startWebPanel(client: Client): Promise<void> {
   if (!webConfig.enabled) {
     console.log('[web] 管理画面は無効化されています(ADMIN_PANEL_ENABLED=false)');
     return;
@@ -40,15 +44,23 @@ export function startWebPanel(client: Client): void {
     console.error('[web] GUILD_ID が未設定のため管理画面を起動できません(権限確認に対象サーバーの指定が必要)');
     return;
   }
-  if (webConfig.sessionSecretIsGenerated) {
-    console.warn('[web] SESSION_SECRET が未設定のため、再起動のたびに管理画面のログインがリセットされます');
+
+  // SESSION_SECRETが未設定でも、再起動のたびにログインが無効化され続けないよう
+  // DBに永久保存した値を使い回す(「認証しても認証しても弾かれる」問題の主因だった)
+  const sessionSecret = webConfig.sessionSecretFromEnv ?? (await getOrCreatePersistedSessionSecret());
+  if (!webConfig.sessionSecretFromEnv) {
+    console.log('[web] SESSION_SECRET未設定のため、data/db.jsonに保存した鍵を使用します(再起動しても維持されます)');
   }
 
   const app = express();
+  // リバースプロキシ(MrtCloud等)配下でクッキーのSecure属性やIP判定を正しく扱うために必要
+  app.set('trust proxy', 1);
+
+  app.use(helmet());
   app.use(express.json());
   app.use(
     session({
-      secret: webConfig.sessionSecret,
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -60,19 +72,30 @@ export function startWebPanel(client: Client): void {
     }),
   );
 
-  app.get('/login', (_req, res) => {
+  app.get('/login', (req, res) => {
+    // OAuth2のログインCSRF(state固定)対策。/callbackで値が一致することを確認する
+    const state = crypto.randomBytes(16).toString('hex');
+    req.session.oauthState = state;
+
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: `${webConfig.baseUrl}/callback`,
       response_type: 'code',
       scope: 'identify',
-      prompt: 'consent',
+      state,
     });
     res.redirect(`https://discord.com/oauth2/authorize?${params.toString()}`);
   });
 
   app.get('/callback', async (req, res) => {
-    const code = req.query.code;
+    const { code, state } = req.query;
+
+    if (typeof state !== 'string' || !req.session.oauthState || state !== req.session.oauthState) {
+      res.status(400).send('認証セッションが無効です(有効期限切れ、または不正なリクエストの可能性)。もう一度 /login からやり直してください。');
+      return;
+    }
+    delete req.session.oauthState;
+
     if (typeof code !== 'string') {
       res.status(400).send('認証コードがありません。もう一度 /login からやり直してください。');
       return;
@@ -118,9 +141,17 @@ export function startWebPanel(client: Client): void {
         return;
       }
 
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      res.redirect('/');
+      // セッション固定攻撃を避けるため、権限確認後にセッションIDを再発行してから認証情報を格納する
+      req.session.regenerate((error) => {
+        if (error) {
+          console.error('[web] セッションの再生成に失敗しました', error);
+          res.status(500).send('ログインに失敗しました。時間をおいて再度お試しください。');
+          return;
+        }
+        req.session.userId = user.id;
+        req.session.username = user.username;
+        res.redirect('/');
+      });
     } catch (error) {
       console.error('[web] OAuth2ログインに失敗しました', error);
       res.status(500).send('ログインに失敗しました。時間をおいて再度お試しください。');

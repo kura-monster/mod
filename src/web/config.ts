@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { optional, optionalBool, optionalInt } from '../config.js';
 
 // ホスティングパネル(MrtCloud等)は PORT / HOST 環境変数でリッスンすべきポート・アドレスを
@@ -7,7 +6,6 @@ import { optional, optionalBool, optionalInt } from '../config.js';
 const port = optionalInt('PORT', optionalInt('ADMIN_PANEL_PORT', 3000));
 // 127.0.0.1/localhostにすると外部からアクセスできないパネルが多いため既定は0.0.0.0にする
 const host = optional('HOST') ?? '0.0.0.0';
-const sessionSecretFromEnv = optional('SESSION_SECRET');
 
 export const webConfig = {
   enabled: optionalBool('ADMIN_PANEL_ENABLED', true),
@@ -15,6 +13,6 @@ export const webConfig = {
   host,
   baseUrl: optional('ADMIN_PANEL_BASE_URL') ?? `http://localhost:${port}`,
   clientSecret: optional('DISCORD_CLIENT_SECRET'),
-  sessionSecret: sessionSecretFromEnv ?? crypto.randomBytes(32).toString('hex'),
-  sessionSecretIsGenerated: !sessionSecretFromEnv,
+  // 未設定の場合は data/db.json に永久保存された値を使う(server.tsで解決する)
+  sessionSecretFromEnv: optional('SESSION_SECRET'),
 };

@@ -166,7 +166,8 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
    DISCORD_CLIENT_SECRET=(手順1で控えたもの)
    ADMIN_PANEL_BASE_URL=http://localhost:3000(本番は実際の公開URL)
    ADMIN_PANEL_PORT=3000
-   SESSION_SECRET=適当なランダム文字列(未設定でも動くが再起動でログアウトされる)
+   SESSION_SECRET=適当なランダム文字列(未設定でも data/db.json に自動生成した鍵を保存して使い回すので、
+   再起動のたびに全員ログアウトされることはない。複数環境で共有したい場合などに明示的に設定する)
    ```
 3. `npm run dev` または `npm start` でボットと同時に管理画面が起動する
 4. ブラウザで `ADMIN_PANEL_BASE_URL` を開く → `/login` に自動転送 → Discordでログイン →
@@ -189,6 +190,17 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
 - モデレーション操作(BAN/kick/timeout等)は管理画面からは実行できない設計。誤操作の被害を
   抑えるため、実行はDiscordのスラッシュコマンド経由に限定している
 - 管理画面を無効化したい場合は `ADMIN_PANEL_ENABLED=false`
+
+### セキュリティ対策
+- **セッションの永続化**: `SESSION_SECRET`未設定時でも`data/db.json`に鍵を保存して使い回すため、
+  プロセス再起動のたびにログインセッションが無効化されて延々と再認証を求められる不具合を解消済み
+- **OAuth2のログインCSRF対策**: `/login`発行時に`state`パラメータを発行し、`/callback`で一致を
+  検証してから処理する(不一致・欠落時は400エラー)
+- **セッション固定攻撃対策**: 権限確認後にセッションIDを再発行してから認証情報を保存する
+- **XSS対策**: 管理画面のケース履歴テーブルは、Discordメッセージ内容やニックネーム由来の値を
+  表示するため、HTMLエスケープしてから描画する([app.js](src/web/public/app.js))
+- **HTTPセキュリティヘッダー**: `helmet`ミドルウェアでX-Frame-Options等の基本的なヘッダーを付与
+- リバースプロキシ配下での動作を想定して`trust proxy`を有効化
 
 ## 必要なボット権限(Botの招待時)
 

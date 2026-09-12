@@ -28,4 +28,6 @@ export interface DatabaseSchema {
   lockdown: Record<string, number>;
   // 管理画面から変更された設定値の上書き(キーは settingsSchema.ts の SettingField.key)
   settingsOverrides: Record<string, unknown>;
+  // SESSION_SECRET未設定時に使う、再起動をまたいで安定させるためのセッション署名鍵
+  sessionSecret?: string;
 }
