@@ -192,7 +192,7 @@ export function startWebPanel(client: Client): void {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
   });
 
-  app.listen(webConfig.port, () => {
-    console.log(`[web] 管理画面を起動しました: ${webConfig.baseUrl} (port ${webConfig.port})`);
+  app.listen(webConfig.port, webConfig.host, () => {
+    console.log(`[web] 管理画面を起動しました: ${webConfig.baseUrl} (${webConfig.host}:${webConfig.port})`);
   });
 }
