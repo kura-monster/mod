@@ -95,6 +95,13 @@ export async function startWebPanel(client: Client): Promise<void> {
     const { code, state } = req.query;
 
     if (typeof state !== 'string' || !req.session?.oauthState || state !== req.session.oauthState) {
+      // stateが弾かれる原因の切り分け用(トークン等の機微な値は出さない)
+      console.warn('[web] state検証に失敗しました', {
+        hasCookieHeader: Boolean(req.headers.cookie),
+        sessionExists: req.session != null,
+        hasStoredState: Boolean(req.session?.oauthState),
+        queryStateReceived: typeof state === 'string',
+      });
       res
         .status(400)
         .send('認証セッションが無効です(有効期限切れ、または不正なリクエストの可能性)。もう一度 /login からやり直してください。');
