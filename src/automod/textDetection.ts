@@ -83,11 +83,33 @@ export function isZalgo(content: string, maxMarksPerChar: number): boolean {
   return marks / baseChars > maxMarksPerChar;
 }
 
-export function matchesBannedWord(content: string, words: string[]): string | null {
+// 全角/半角統一・ゼロ幅文字除去・区切り記号除去を行い、「ｂ a‌d」「b.a.d」「b-a-d」のような
+// フィルター回避目的の装飾をすり抜けにくくする。区切り文字を丸ごと除去するため、
+// まれに複数単語をまたいで意図しない一致が起きうるが、NGワード検知の性質上は許容する
+// ゼロ幅スペース/ゼロ幅非接合子/ゼロ幅接合子/BOMのコードポイント
+// (ソースファイルへの不可視文字の直接埋め込みを避けるため数値で判定する)
+const ZERO_WIDTH_CODEPOINTS = new Set([0x200b, 0x200c, 0x200d, 0xfeff]);
+
+function stripZeroWidthChars(text: string): string {
+  return [...text].filter((ch) => !ZERO_WIDTH_CODEPOINTS.has(ch.codePointAt(0) ?? -1)).join('');
+}
+
+function normalizeForMatching(text: string): string {
+  return stripZeroWidthChars(text)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+export function matchesBannedWord(content: string, words: string[], normalize = false): string | null {
   if (words.length === 0) return null;
   const lower = content.toLowerCase();
+  const normalizedContent = normalize ? normalizeForMatching(content) : null;
+
   for (const word of words) {
-    if (word && lower.includes(word.toLowerCase())) return word;
+    if (!word) continue;
+    if (lower.includes(word.toLowerCase())) return word;
+    if (normalizedContent && normalizedContent.includes(normalizeForMatching(word))) return word;
   }
   return null;
 }
@@ -101,4 +123,37 @@ export function matchesBannedRegex(content: string, pattern?: string): boolean {
     console.warn('[automod] AUTOMOD_BANNED_WORDS_REGEX が不正な正規表現のため無視しました');
     return false;
   }
+}
+
+/** メッセージ中のURLからホスト名(www.は除く)を抽出する */
+export function extractDomains(content: string): string[] {
+  const domains: string[] = [];
+  for (const match of content.matchAll(/https?:\/\/([^/\s]+)/gi)) {
+    const host = match[1]?.toLowerCase().split(':')[0];
+    if (host) domains.push(host.replace(/^www\./, ''));
+  }
+  return domains;
+}
+
+/** ドメイン(またはそのサブドメイン)が禁止リストに含まれていれば、一致した禁止ドメインを返す */
+export function matchesBlockedDomain(domains: string[], blockedList: string[]): string | null {
+  for (const domain of domains) {
+    for (const blocked of blockedList) {
+      if (!blocked) continue;
+      const normalizedBlocked = blocked.toLowerCase().replace(/^www\./, '');
+      if (domain === normalizedBlocked || domain.endsWith(`.${normalizedBlocked}`)) return blocked;
+    }
+  }
+  return null;
+}
+
+/** 添付ファイル名の拡張子が禁止リストに含まれていれば、そのファイル名を返す */
+export function findBlockedAttachment(fileNames: string[], blockedExtensions: string[]): string | null {
+  if (blockedExtensions.length === 0) return null;
+  const normalizedBlocked = blockedExtensions.map((ext) => ext.toLowerCase().replace(/^\./, ''));
+  for (const name of fileNames) {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (ext && normalizedBlocked.includes(ext)) return name;
+  }
+  return null;
 }

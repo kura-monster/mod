@@ -73,11 +73,6 @@ npm start
 - `/invites` — サーバーの有効な招待リンク一覧(作成者・使用回数)を表示。招待作成スパム対策の確認用
 - `/automod-status` — 現在の `AUTOMOD_*` 設定値を一覧表示(設定変更はコマンドではなく環境変数で行う)
 - `/admin-login` — 管理画面ログイン用のワンタイムコード(5分間有効)を発行する
-- `/reports <user>` — メンバーが受けた通報の履歴を表示(永続DB)
-
-### 通報(権限制限なし、全メンバーが使用可能)
-- `/report <user> <reason> [message_link]` — 問題行動を`REPORT_CHANNEL_ID`のチャンネルへ通報する
-  (`MODERATOR_ROLE_ID`をメンション)。履歴は`/reports`で照会可能
 
 ## 鯖タグ(Server Tag)連動ロール
 
@@ -123,10 +118,9 @@ Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバ�
 - 無許可のDiscord招待リンク検知(`AUTOMOD_INVITE_ALLOWLIST` で自サーバー招待を除外可)→ 10分タイムアウト
 - URL大量投稿検知(`AUTOMOD_URL_LIMIT`、広告/フィッシングURLの連投)→ 10分タイムアウト
 - **招待リンク作成スパム検知**(`AUTOMOD_INVITE_CREATE_LIMIT`/`_WINDOW_MS`、レイド用の大量発行対策)→ 招待削除+10分タイムアウト
-- **1日あたりの最大投稿数**(`AUTOMOD_DAILY_MESSAGE_LIMIT`、既定は無効)。短時間のフラッド検知とは別に、
-  24時間の投稿数が上限に達したら`AUTOMOD_DAILY_MESSAGE_TIMEOUT_MINUTES`分タイムアウトする
-- **警告エスカレーション**: `/warn`の累計回数が`AUTOMOD_WARN_ESCALATION_THRESHOLD`の倍数に達するたびに、
-  自動でタイムアウト(既定)またはキックする(既定は無効)
+- **禁止ドメイン**(`AUTOMOD_BLOCKED_DOMAINS`)へのリンク投稿。詐欺リンクの汎用検知とは別に、
+  既知の悪質サイトをドメイン名で確実に遮断したいときに使う(サブドメインも一致)→ 10分タイムアウト
+- **危険な添付ファイル**(`AUTOMOD_BLOCKED_ATTACHMENT_EXTENSIONS`、exe/bat/scr等)の自動削除
 
 ### 重度(モデレーターにメンション)
 - 詐欺・フィッシングの疑いがあるリンク/文言検知(Nitro詐欺等の定番パターン+`AUTOMOD_SCAM_EXTRA_KEYWORDS`)→ 自動BAN
@@ -136,6 +130,15 @@ Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバ�
   乗っ取られた管理者アカウント等による破壊行為を想定しているため、通常の自動検知と異なり
   **ManageGuild権限保持者は自動的には除外しない**(サーバーオーナーと`AUTOMOD_EXEMPT_ROLE_IDS`のみ除外)。
   ボットに「監査ログを見る」権限が必要
+
+### NGワードの回避対策
+`AUTOMOD_NORMALIZE_BANNED_WORDS`(既定true)を有効にすると、NGワード判定の前に
+全角/半角統一・記号除去などの正規化を行い、「b.a.d」「ｂａｄ」のようなフィルター回避目的の
+装飾をすり抜けにくくする。まれに複数単語をまたいで意図しない一致が起きうるトレードオフがある。
+
+### チャンネル除外
+`AUTOMOD_EXEMPT_CHANNEL_IDS` に指定したチャンネルでは自動検知を一切行わない
+(bot-commands・nsfw-text等、通常と異なるルールを適用したい運用チャンネル向け)。
 
 ### メッセージ監査ログ(軽度、既定は無効)
 - `LOG_MESSAGE_EDITS` / `LOG_MESSAGE_DELETES` を`true`にすると、メッセージの編集前後・削除内容を
@@ -253,7 +256,7 @@ src/
   deploy-commands.ts      スラッシュコマンド登録スクリプト
   types/moderation.ts     モデレーション行為と重大度の定義(拡張ポイント)
   data/
-    db.ts                    .jsonファイルへの永久保存を行う自作DB(ケース履歴/警告/通報/ロックダウン状態)
+    db.ts                    .jsonファイルへの永久保存を行う自作DB(ケース履歴/警告/ロックダウン状態)
     types.ts                  DBスキーマの型定義
   services/
     moderationLog.ts       重大度別ログ送信ロジック(送信のたびにDBへケースを記録)

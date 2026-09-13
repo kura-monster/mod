@@ -276,51 +276,13 @@ export const SETTINGS_SCHEMA: SettingField[] = [
     group: 'アンチNuke',
   },
 
-  // --- メッセージ数・文字数の上限 ---
+  // --- メッセージ文字数の上限 ---
   {
     key: 'automod.maxMessageLength',
     envVar: 'AUTOMOD_MAX_MESSAGE_LENGTH',
     label: '1メッセージの最大文字数(0で無効)',
     type: 'number',
-    group: 'メッセージ数・文字数の上限',
-  },
-  {
-    key: 'automod.dailyMessage.limit',
-    envVar: 'AUTOMOD_DAILY_MESSAGE_LIMIT',
-    label: '1日あたりの最大投稿数(0で無効)',
-    type: 'number',
-    group: 'メッセージ数・文字数の上限',
-  },
-  {
-    key: 'automod.dailyMessage.timeoutMinutes',
-    envVar: 'AUTOMOD_DAILY_MESSAGE_TIMEOUT_MINUTES',
-    label: '投稿数上限超過時のタイムアウト時間(分)',
-    type: 'number',
-    group: 'メッセージ数・文字数の上限',
-  },
-
-  // --- 警告エスカレーション ---
-  {
-    key: 'automod.warnEscalation.threshold',
-    envVar: 'AUTOMOD_WARN_ESCALATION_THRESHOLD',
-    label: '警告が何回に達するたびに自動処罰するか(0で無効)',
-    type: 'number',
-    group: '警告エスカレーション',
-  },
-  {
-    key: 'automod.warnEscalation.action',
-    envVar: 'AUTOMOD_WARN_ESCALATION_ACTION',
-    label: '自動処罰の内容',
-    type: 'select',
-    options: ['timeout', 'kick'],
-    group: '警告エスカレーション',
-  },
-  {
-    key: 'automod.warnEscalation.timeoutMinutes',
-    envVar: 'AUTOMOD_WARN_ESCALATION_TIMEOUT_MINUTES',
-    label: '自動処罰がtimeoutの場合の時間(分)',
-    type: 'number',
-    group: '警告エスカレーション',
+    group: 'メッセージ文字数の上限',
   },
 
   // --- メッセージ監査ログ ---
@@ -339,13 +301,34 @@ export const SETTINGS_SCHEMA: SettingField[] = [
     group: 'メッセージ監査ログ',
   },
 
-  // --- 通報システム ---
+  // --- チャンネル除外・禁止ドメイン・危険な添付ファイル・NGワード回避対策 ---
   {
-    key: 'reportChannelId',
-    envVar: 'REPORT_CHANNEL_ID',
-    label: '/reportコマンドの通報先チャンネルID',
-    type: 'channel',
-    group: '通報システム',
+    key: 'automod.exemptChannelIds',
+    envVar: 'AUTOMOD_EXEMPT_CHANNEL_IDS',
+    label: '自動検知の対象外にするチャンネルID(複数指定可)',
+    type: 'stringList',
+    group: '実用機能',
+  },
+  {
+    key: 'automod.blockedDomains',
+    envVar: 'AUTOMOD_BLOCKED_DOMAINS',
+    label: '名指しで禁止するドメイン(サブドメインも含めて一致)',
+    type: 'stringList',
+    group: '実用機能',
+  },
+  {
+    key: 'automod.blockedAttachmentExtensions',
+    envVar: 'AUTOMOD_BLOCKED_ATTACHMENT_EXTENSIONS',
+    label: '禁止する添付ファイルの拡張子(例: exe, bat, scr)',
+    type: 'stringList',
+    group: '実用機能',
+  },
+  {
+    key: 'automod.normalizeBannedWordMatching',
+    envVar: 'AUTOMOD_NORMALIZE_BANNED_WORDS',
+    label: 'NGワード判定時に全角/半角統一・記号除去などの正規化を行う(回避策対策)',
+    type: 'boolean',
+    group: '実用機能',
   },
 ];
 

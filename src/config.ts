@@ -66,7 +66,4 @@ export const config = {
     // 鯖タグを着用しているメンバーに自動付与/非着用時に自動剥奪するロールID(未設定なら機能自体が無効)
     roleId: optional('SERVER_TAG_ROLE_ID'),
   },
-
-  // /report コマンドの通報先チャンネル(未設定なら/reportは使えない)
-  reportChannelId: optional('REPORT_CHANNEL_ID'),
 };

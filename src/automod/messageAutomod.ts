@@ -4,16 +4,19 @@ import type { ActionKey } from '../types/moderation.js';
 import { banMemberSafe, deleteMessageSafe, kickMemberSafe, timeoutMemberSafe } from './actions.js';
 import { automodConfig } from './config.js';
 import { isExemptMember } from './exempt.js';
-import { incrementDailyMessageCount, pushAndGetMessageHistory } from './state.js';
+import { pushAndGetMessageHistory } from './state.js';
 import {
   calcCapsRatio,
   containsScamPattern,
   countEmojis,
   countUrls,
+  extractDomains,
   extractInviteCodes,
+  findBlockedAttachment,
   isZalgo,
   matchesBannedRegex,
   matchesBannedWord,
+  matchesBlockedDomain,
 } from './textDetection.js';
 
 interface ReportAndActParams {
@@ -58,6 +61,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
   if (!automodConfig.enabled) return;
   if (message.author.bot || message.webhookId || !message.guild || !message.member) return;
   if (isExemptMember(message.member)) return;
+  if (automodConfig.exemptChannelIds.includes(message.channelId)) return;
 
   const content = message.content ?? '';
   const now = message.createdTimestamp;
@@ -129,16 +133,17 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 5. 1日あたりの最大投稿数(短時間のフラッドとは別の、長期的な過剰投稿を検知)
-  if (automodConfig.dailyMessage.limit > 0) {
-    const dailyCount = incrementDailyMessageCount(message.author.id, now);
-    if (dailyCount >= automodConfig.dailyMessage.limit) {
+  // 5. 危険な添付ファイル拡張子(実行ファイル等)
+  if (message.attachments.size > 0 && automodConfig.blockedAttachmentExtensions.length > 0) {
+    const blockedFile = findBlockedAttachment(
+      [...message.attachments.values()].map((a) => a.name),
+      automodConfig.blockedAttachmentExtensions,
+    );
+    if (blockedFile) {
       await reportAndAct({
         message,
-        action: 'AUTO_DAILY_MESSAGE_LIMIT',
-        reason: `24時間以内の投稿数が上限(${automodConfig.dailyMessage.limit}件)に達しました`,
-        timeoutMs: automodConfig.dailyMessage.timeoutMinutes * 60 * 1000,
-        extra: { 投稿数: `${dailyCount}件` },
+        action: 'AUTO_BLOCKED_ATTACHMENT',
+        reason: `禁止されている拡張子の添付ファイルを検知しました (${blockedFile})`,
       });
       return;
     }
@@ -179,7 +184,22 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 9. 詐欺・フィッシングの疑いがあるリンク/文言(最優先で重度対応)
+  // 9. 名指しで禁止したドメイン(詐欺サイト・違法賭博等をピンポイントで遮断)
+  if (automodConfig.blockedDomains.length > 0) {
+    const domains = extractDomains(content);
+    const blockedDomain = matchesBlockedDomain(domains, automodConfig.blockedDomains);
+    if (blockedDomain) {
+      await reportAndAct({
+        message,
+        action: 'AUTO_BLOCKED_DOMAIN',
+        reason: `禁止ドメインへのリンクを検知しました (${blockedDomain})`,
+        timeoutMs: 10 * 60 * 1000,
+      });
+      return;
+    }
+  }
+
+  // 10. 詐欺・フィッシングの疑いがあるリンク/文言(最優先で重度対応)
   if (automodConfig.scamLink.block && containsScamPattern(content, automodConfig.scamLink.extraKeywords)) {
     await reportAndAct({
       message,
@@ -190,7 +210,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 10. 無許可のDiscord招待リンク
+  // 11. 無許可のDiscord招待リンク
   if (automodConfig.invite.block) {
     const codes = extractInviteCodes(content);
     const disallowed = codes.filter((code) => !automodConfig.invite.allowlist.includes(code));
@@ -205,8 +225,8 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     }
   }
 
-  // 11. 重大NGワード(悪質な差別語・脅迫など、人的対応が必要なもの)
-  const severeWord = matchesBannedWord(content, automodConfig.severeBannedWords);
+  // 12. 重大NGワード(悪質な差別語・脅迫など、人的対応が必要なもの)
+  const severeWord = matchesBannedWord(content, automodConfig.severeBannedWords, automodConfig.normalizeBannedWordMatching);
   if (severeWord) {
     await reportAndAct({
       message,
@@ -217,8 +237,8 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 12. 通常のNGワード・正規表現
-  const bannedWord = matchesBannedWord(content, automodConfig.bannedWords);
+  // 13. 通常のNGワード・正規表現
+  const bannedWord = matchesBannedWord(content, automodConfig.bannedWords, automodConfig.normalizeBannedWordMatching);
   const regexHit = matchesBannedRegex(content, automodConfig.bannedWordsRegex);
   if (bannedWord || regexHit) {
     await reportAndAct({
@@ -229,7 +249,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 13. 大文字乱用(いわゆる叫び)
+  // 14. 大文字乱用(いわゆる叫び)
   if (content.length >= automodConfig.caps.minLength && calcCapsRatio(content) >= automodConfig.caps.ratio) {
     await reportAndAct({
       message,
@@ -239,7 +259,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 14. 絵文字乱用
+  // 15. 絵文字乱用
   if (countEmojis(content) >= automodConfig.emoji.limit) {
     await reportAndAct({
       message,
@@ -249,7 +269,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 15. Zalgo(装飾)テキスト
+  // 16. Zalgo(装飾)テキスト
   if (automodConfig.zalgo.enabled && isZalgo(content, automodConfig.zalgo.maxMarksPerChar)) {
     await reportAndAct({
       message,
