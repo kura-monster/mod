@@ -90,6 +90,12 @@ export async function startWebPanel(client: Client): Promise<void> {
     const state = crypto.randomBytes(16).toString('hex');
     if (req.session) req.session.oauthState = state;
 
+    console.log('[web] /login でstateを発行しました', {
+      statePrefix: state.slice(0, 8),
+      sessionIsNewBeforeAssign: req.session?.isNew,
+      sessionPopulatedAfterAssign: req.session?.isPopulated,
+    });
+
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: `${webConfig.baseUrl}/callback`,
@@ -104,10 +110,20 @@ export async function startWebPanel(client: Client): Promise<void> {
     const { code, state } = req.query;
 
     if (typeof state !== 'string' || !req.session?.oauthState || state !== req.session.oauthState) {
-      // stateが弾かれる原因の切り分け用(トークン等の機微な値は出さない)
+      // cookie-sessionは署名検証に失敗しても「空の新規セッション」を作って返すため、
+      // req.session != null だけでは「Cookieが正しく検証できたか」を判別できない。
+      // isNew/isPopulatedと生のCookie名の有無まで見て切り分ける(値自体は出さない)
+      const cookieNames = (req.headers.cookie ?? '')
+        .split(';')
+        .map((c) => c.split('=')[0]?.trim())
+        .filter(Boolean);
       console.warn('[web] state検証に失敗しました', {
-        hasCookieHeader: Boolean(req.headers.cookie),
-        sessionExists: req.session != null,
+        queryStatePrefix: typeof state === 'string' ? state.slice(0, 8) : null,
+        cookieNamesPresent: cookieNames,
+        hasSessionCookie: cookieNames.includes('session'),
+        hasSessionSigCookie: cookieNames.includes('session.sig'),
+        sessionIsNew: req.session?.isNew,
+        sessionIsPopulated: req.session?.isPopulated,
         hasStoredState: Boolean(req.session?.oauthState),
         queryStateReceived: typeof state === 'string',
       });
