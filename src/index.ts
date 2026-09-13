@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { config } from './config.js';
 import { commands } from './commands/index.js';
+import { deploySlashCommands } from './commands/deploy.js';
 import { registerReadyEvent } from './events/ready.js';
 import { registerMemberEvents } from './events/memberEvents.js';
 import { registerInteractionEvent } from './events/interactionCreate.js';
@@ -36,5 +37,14 @@ registerServerTagEvents(client);
 // 管理画面で変更された設定(data/db.json)をAUTOMOD_*の初期値に上書きしてから起動する
 await loadPersistedSettings();
 await startWebPanel(client);
+
+// 起動のたびに自動でスラッシュコマンドを登録する(npm run deploy-commandsを毎回手動実行しなくてよい)
+try {
+  console.log(`⏳ ${commands.size} 件のスラッシュコマンドを登録しています...`);
+  await deploySlashCommands();
+  console.log('✅ スラッシュコマンドの登録が完了しました。');
+} catch (error) {
+  console.error('❌ スラッシュコマンドの登録に失敗しました', error);
+}
 
 client.login(config.token);
