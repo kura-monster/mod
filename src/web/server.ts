@@ -57,7 +57,7 @@ function renderLoginPage(error?: string): string {
   ワンタイムコードが表示されます(管理者権限を持つメンバーのみ実行可能)。
   発行から5分以内に、そのコードを下に入力してください。</p>
   <form method="POST" action="/login">
-    <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autofocus required />
+    <input type="text" name="code" inputmode="numeric" placeholder="000000" autofocus required />
     <button type="submit">ログイン</button>
   </form>
   ${error ? `<p class="login-error">${error}</p>` : ''}
@@ -116,6 +116,14 @@ export async function startWebPanel(client: Client): Promise<void> {
   app.post('/login', (req, res) => {
     const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
     const entry = consumeLoginCode(code);
+
+    console.log('[web] /loginへのコード送信を受信しました', {
+      contentType: req.headers['content-type'] ?? null,
+      bodyIsObject: typeof req.body === 'object' && req.body !== null,
+      bodyKeys: req.body && typeof req.body === 'object' ? Object.keys(req.body) : [],
+      codeLength: code.length,
+      matched: entry != null,
+    });
 
     if (!entry) {
       res.status(401).send(renderLoginPage('コードが無効か、有効期限が切れています。Discordで /admin-login を実行し直してください。'));
