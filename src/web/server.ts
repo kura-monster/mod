@@ -1,38 +1,27 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import cookieSession from 'cookie-session';
 import type { Client } from 'discord.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { config } from '../config.js';
+import { createAuthToken, verifyAuthToken } from './authTokens.js';
 import { getCasesSince, getOrCreatePersistedSessionSecret, getRecentCases } from '../data/db.js';
 import { getEffectiveSettings, updateSettingByKey } from './configBridge.js';
 import { webConfig } from './config.js';
 import { consumeLoginCode } from './loginCodes.js';
 import { SETTINGS_SCHEMA } from './settingsSchema.js';
 
-// @types/cookie-session は CookieSessionObject をグローバル名前空間に宣言しているため、
-// 'declare module' ではなく 'declare global' 側でマージする必要がある
 declare global {
-  namespace CookieSessionInterfaces {
-    interface CookieSessionObject {
-      userId?: string;
-      username?: string;
+  namespace Express {
+    interface Request {
+      authUser?: { userId: string; username: string };
     }
   }
 }
 
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url));
 
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (req.session?.userId) {
-    next();
-    return;
-  }
-  res.status(401).json({ error: '認証が必要です' });
-}
-
-function renderLoginPage(error?: string): string {
+function renderLoginPage(): string {
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -47,7 +36,7 @@ function renderLoginPage(error?: string): string {
   .login-wrap form { margin-top: 20px; display: flex; gap: 8px; }
   .login-wrap input { flex: 1; font-size: 18px; letter-spacing: 4px; text-align: center; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); }
   .login-wrap button { padding: 10px 20px; border-radius: 6px; border: none; background: var(--accent); color: white; cursor: pointer; font-size: 14px; }
-  .login-error { color: var(--danger); margin-top: 12px; font-size: 13px; }
+  .login-error { color: var(--danger); margin-top: 12px; font-size: 13px; display: none; }
 </style>
 </head>
 <body>
@@ -56,14 +45,49 @@ function renderLoginPage(error?: string): string {
   <p>Discordサーバーで <code>/admin-login</code> コマンドを実行すると、
   ワンタイムコードが表示されます(管理者権限を持つメンバーのみ実行可能)。
   発行から5分以内に、そのコードを下に入力してください。</p>
-  <form method="POST" action="/login">
-    <input type="text" name="code" inputmode="numeric" placeholder="000000" autofocus required />
+  <form id="login-form">
+    <input type="text" name="code" id="code-input" inputmode="numeric" placeholder="000000" autofocus required autocomplete="one-time-code" />
     <button type="submit">ログイン</button>
   </form>
-  ${error ? `<p class="login-error">${error}</p>` : ''}
+  <p class="login-error" id="login-error"></p>
 </div>
+<script>
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('login-error');
+    errorEl.style.display = 'none';
+    const code = document.getElementById('code-input').value.trim();
+
+    try {
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.token) {
+        errorEl.textContent = data.error || 'ログインに失敗しました。';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      localStorage.setItem('rula_admin_token', data.token);
+      window.location.href = '/';
+    } catch {
+      errorEl.textContent = 'ログインに失敗しました。ネットワークを確認してください。';
+      errorEl.style.display = 'block';
+    }
+  });
+</script>
 </body>
 </html>`;
+}
+
+function getBearerToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim();
 }
 
 export async function startWebPanel(client: Client): Promise<void> {
@@ -76,34 +100,30 @@ export async function startWebPanel(client: Client): Promise<void> {
     return;
   }
 
-  // SESSION_SECRETが未設定でも、再起動のたびにログインが無効化され続けないよう
-  // DBに永久保存した値を使い回す
-  const sessionSecret = webConfig.sessionSecretFromEnv ?? (await getOrCreatePersistedSessionSecret());
+  // このトークン署名鍵はSESSION_SECRET未設定時、data/db.jsonに永久保存した値を使い回す
+  const secret = webConfig.sessionSecretFromEnv ?? (await getOrCreatePersistedSessionSecret());
   if (!webConfig.sessionSecretFromEnv) {
     console.log('[web] SESSION_SECRET未設定のため、data/db.jsonに保存した鍵を使用します(再起動しても維持されます)');
   }
 
+  function requireAuth(req: Request, res: Response, next: NextFunction): void {
+    const token = getBearerToken(req);
+    const payload = token ? verifyAuthToken(token, secret) : null;
+    if (!payload) {
+      res.status(401).json({ error: '認証が必要です' });
+      return;
+    }
+    req.authUser = { userId: payload.userId, username: payload.username };
+    next();
+  }
+
   const app = express();
-  // リバースプロキシ(MrtCloud等)配下でクッキーのSecure属性やIP判定を正しく扱うために必要
   app.set('trust proxy', 1);
 
   app.use(helmet());
   app.use(express.json());
-  app.use(express.urlencoded({ extended: false }));
-  // サーバー側にセッションを持たない、署名付きCookieのみの方式。プロセス再起動があっても
-  // ログイン状態が失われない
-  app.use(
-    cookieSession({
-      name: 'session',
-      keys: [sessionSecret],
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: webConfig.baseUrl.startsWith('https://'),
-    }),
-  );
 
-  // キャッシュ経由で古いページ/Cookieが再生されるのを防ぐ
+  // キャッシュ経由で古いページが再生されるのを防ぐ
   app.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     next();
@@ -117,30 +137,17 @@ export async function startWebPanel(client: Client): Promise<void> {
     const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
     const entry = consumeLoginCode(code);
 
-    console.log('[web] /loginへのコード送信を受信しました', {
-      contentType: req.headers['content-type'] ?? null,
-      bodyIsObject: typeof req.body === 'object' && req.body !== null,
-      bodyKeys: req.body && typeof req.body === 'object' ? Object.keys(req.body) : [],
-      codeLength: code.length,
-      matched: entry != null,
-    });
-
     if (!entry) {
-      res.status(401).send(renderLoginPage('コードが無効か、有効期限が切れています。Discordで /admin-login を実行し直してください。'));
+      res.status(401).json({ error: 'コードが無効か、有効期限が切れています。Discordで /admin-login を実行し直してください。' });
       return;
     }
 
-    req.session = { userId: entry.userId, username: entry.username };
-    res.redirect('/');
-  });
-
-  app.get('/logout', (req, res) => {
-    req.session = null;
-    res.redirect('/login');
+    const token = createAuthToken(entry.userId, entry.username, secret);
+    res.json({ token, username: entry.username });
   });
 
   app.get('/api/me', requireAuth, (req, res) => {
-    res.json({ userId: req.session?.userId, username: req.session?.username });
+    res.json({ userId: req.authUser?.userId, username: req.authUser?.username });
   });
 
   app.get('/api/settings', requireAuth, (_req, res) => {
@@ -192,20 +199,8 @@ export async function startWebPanel(client: Client): Promise<void> {
 
   app.use(express.static(PUBLIC_DIR, { index: false }));
 
-  app.get('/', (req, res) => {
-    if (!req.session?.userId) {
-      const cookieNames = (req.headers.cookie ?? '')
-        .split(';')
-        .map((c) => c.split('=')[0]?.trim())
-        .filter(Boolean);
-      console.warn('[web] / でセッションなしと判定しました', {
-        cookieNamesPresent: cookieNames,
-        hasSessionCookie: cookieNames.includes('session'),
-        sessionIsNew: req.session?.isNew,
-      });
-      res.redirect('/login');
-      return;
-    }
+  // 認証確認はクライアント側のJS(/api/meへの呼び出し)で行うため、ここでは無条件で返す
+  app.get('/', (_req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
   });
 

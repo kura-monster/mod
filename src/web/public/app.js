@@ -20,13 +20,34 @@ function showToast(message, kind) {
   }, 2500);
 }
 
+const TOKEN_STORAGE_KEY = 'rula_admin_token';
+
+function getToken() {
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+function clearTokenAndRedirect() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  window.location.href = '/login';
+}
+
 async function api(path, options) {
+  const token = getToken();
+  if (!token) {
+    clearTokenAndRedirect();
+    throw new Error('unauthorized');
+  }
+
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(options && options.headers),
+    },
   });
   if (res.status === 401) {
-    window.location.href = '/login';
+    clearTokenAndRedirect();
     throw new Error('unauthorized');
   }
   const body = await res.json().catch(() => ({}));
@@ -216,7 +237,17 @@ async function loadStats() {
 }
 
 async function init() {
+  if (!getToken()) {
+    window.location.href = '/login';
+    return;
+  }
+
   initTabs();
+
+  document.getElementById('logout-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    clearTokenAndRedirect();
+  });
 
   try {
     const me = await api('/api/me');

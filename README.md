@@ -203,10 +203,13 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
 - 管理画面を無効化したい場合は `ADMIN_PANEL_ENABLED=false`
 
 ### セキュリティ対策
-- **ステートレスなセッション**: `express-session`(既定でサーバーのメモリ上にセッションを保持する)
-  ではなく`cookie-session`を採用し、ログイン情報を署名付きCookie自体に持たせている。
-  サーバー側に状態を持たないため、プロセスが再起動してもログイン状態が失われない
-- `SESSION_SECRET`未設定時は`data/db.json`に署名鍵を保存して使い回す(Cookie自体の署名検証に必要)
+- **Cookieを使わないトークン認証**: ログイン後は署名付きトークンをブラウザの`localStorage`に
+  保存し、以後のAPIリクエストは`Authorization: Bearer <token>`ヘッダーで送る。当初はCookie
+  (express-session→cookie-sessionと2段階で見直した)を使っていたが、一部のホスティング環境で
+  `Set-Cookie`がブラウザに全く届かない(外部リダイレクトの有無や独自ドメイン/既定ドメインを
+  問わず再現)ことが判明し、HTTPのCookie機構自体に依存しない方式へ切り替えた
+- トークンはサーバー側に何も保存しない自己完結型(HMAC署名付き)で、`SESSION_SECRET`
+  (未設定時は`data/db.json`に永久保存した値)を鍵として検証する。有効期限は7日間
 - **ワンタイムコード方式のログイン**: `/admin-login`(Administrator権限限定)が発行する
   6桁コードは5分で失効・1回使うと即座に無効化される使い捨て
 - **XSS対策**: 管理画面のケース履歴テーブルは、Discordメッセージ内容やニックネーム由来の値を
@@ -256,6 +259,7 @@ src/
   web/
     config.ts                ADMIN_PANEL_* / SESSION_SECRET の読み込み
     loginCodes.ts             /admin-login用ワンタイムコードの発行・検証(インメモリ、5分で失効)
+    authTokens.ts              Cookieを使わない署名付き認証トークンの発行・検証
     settingsSchema.ts         管理画面で編集できる設定項目の一覧(拡張ポイント)
     pathUtil.ts                'automod.duplicate.limit'のようなドットパスの取得/設定ユーティリティ
     validate.ts                 設定値の型バリデーション
