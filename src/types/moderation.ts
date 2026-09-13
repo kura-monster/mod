@@ -51,6 +51,16 @@ export const ACTIONS = {
   AUTO_URL_SPAM: { label: 'URL大量投稿', severity: 'moderate' },
   AUTO_NICKNAME_SPAM: { label: 'ニックネーム変更スパム', severity: 'minor' },
   AUTO_NUKE_ATTEMPT: { label: 'サーバー破壊行為の疑い(チャンネル/ロール大量削除)', severity: 'severe' },
+  AUTO_MESSAGE_TOO_LONG: { label: '長文メッセージ', severity: 'minor' },
+  AUTO_DAILY_MESSAGE_LIMIT: { label: '1日あたりの投稿数上限超過', severity: 'moderate' },
+
+  // --- 警告エスカレーション ---
+  WARN_ESCALATION_TIMEOUT: { label: '警告累計によるエスカレーション(自動タイムアウト)', severity: 'moderate' },
+  WARN_ESCALATION_KICK: { label: '警告累計によるエスカレーション(自動キック)', severity: 'moderate' },
+
+  // --- メッセージ監査ログ ---
+  MESSAGE_EDITED: { label: 'メッセージ編集', severity: 'minor' },
+  MESSAGE_DELETED: { label: 'メッセージ削除', severity: 'minor' },
 } as const satisfies Record<string, ActionMeta>;
 
 export type ActionKey = keyof typeof ACTIONS;

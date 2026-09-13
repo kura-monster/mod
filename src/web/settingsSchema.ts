@@ -275,6 +275,78 @@ export const SETTINGS_SCHEMA: SettingField[] = [
     type: 'number',
     group: 'アンチNuke',
   },
+
+  // --- メッセージ数・文字数の上限 ---
+  {
+    key: 'automod.maxMessageLength',
+    envVar: 'AUTOMOD_MAX_MESSAGE_LENGTH',
+    label: '1メッセージの最大文字数(0で無効)',
+    type: 'number',
+    group: 'メッセージ数・文字数の上限',
+  },
+  {
+    key: 'automod.dailyMessage.limit',
+    envVar: 'AUTOMOD_DAILY_MESSAGE_LIMIT',
+    label: '1日あたりの最大投稿数(0で無効)',
+    type: 'number',
+    group: 'メッセージ数・文字数の上限',
+  },
+  {
+    key: 'automod.dailyMessage.timeoutMinutes',
+    envVar: 'AUTOMOD_DAILY_MESSAGE_TIMEOUT_MINUTES',
+    label: '投稿数上限超過時のタイムアウト時間(分)',
+    type: 'number',
+    group: 'メッセージ数・文字数の上限',
+  },
+
+  // --- 警告エスカレーション ---
+  {
+    key: 'automod.warnEscalation.threshold',
+    envVar: 'AUTOMOD_WARN_ESCALATION_THRESHOLD',
+    label: '警告が何回に達するたびに自動処罰するか(0で無効)',
+    type: 'number',
+    group: '警告エスカレーション',
+  },
+  {
+    key: 'automod.warnEscalation.action',
+    envVar: 'AUTOMOD_WARN_ESCALATION_ACTION',
+    label: '自動処罰の内容',
+    type: 'select',
+    options: ['timeout', 'kick'],
+    group: '警告エスカレーション',
+  },
+  {
+    key: 'automod.warnEscalation.timeoutMinutes',
+    envVar: 'AUTOMOD_WARN_ESCALATION_TIMEOUT_MINUTES',
+    label: '自動処罰がtimeoutの場合の時間(分)',
+    type: 'number',
+    group: '警告エスカレーション',
+  },
+
+  // --- メッセージ監査ログ ---
+  {
+    key: 'automod.messageAudit.logEdits',
+    envVar: 'LOG_MESSAGE_EDITS',
+    label: 'メッセージの編集をログに残す',
+    type: 'boolean',
+    group: 'メッセージ監査ログ',
+  },
+  {
+    key: 'automod.messageAudit.logDeletes',
+    envVar: 'LOG_MESSAGE_DELETES',
+    label: 'メッセージの削除をログに残す',
+    type: 'boolean',
+    group: 'メッセージ監査ログ',
+  },
+
+  // --- 通報システム ---
+  {
+    key: 'reportChannelId',
+    envVar: 'REPORT_CHANNEL_ID',
+    label: '/reportコマンドの通報先チャンネルID',
+    type: 'channel',
+    group: '通報システム',
+  },
 ];
 
 export function findSettingField(key: string): SettingField | undefined {

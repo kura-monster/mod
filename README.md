@@ -73,6 +73,11 @@ npm start
 - `/invites` — サーバーの有効な招待リンク一覧(作成者・使用回数)を表示。招待作成スパム対策の確認用
 - `/automod-status` — 現在の `AUTOMOD_*` 設定値を一覧表示(設定変更はコマンドではなく環境変数で行う)
 - `/admin-login` — 管理画面ログイン用のワンタイムコード(5分間有効)を発行する
+- `/reports <user>` — メンバーが受けた通報の履歴を表示(永続DB)
+
+### 通報(権限制限なし、全メンバーが使用可能)
+- `/report <user> <reason> [message_link]` — 問題行動を`REPORT_CHANNEL_ID`のチャンネルへ通報する
+  (`MODERATOR_ROLE_ID`をメンション)。履歴は`/reports`で照会可能
 
 ## 鯖タグ(Server Tag)連動ロール
 
@@ -107,6 +112,7 @@ Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバ�
 - Zalgo(結合文字による装飾)テキスト検知
 - 新規アカウントの参加検知(`AUTOMOD_MIN_ACCOUNT_AGE_MS`、既定はログのみ)
 - 不審なユーザー名検知(ランダム英数字パターン=量産アカウントの疑い)
+- **最大メッセージ文字数**(`AUTOMOD_MAX_MESSAGE_LENGTH`、既定は無効)超過による長文荒らし検知 → 削除のみ
 
 ### 中度
 - 連投スパム検知(同一内容の短時間連投)→ 10分タイムアウト
@@ -117,6 +123,10 @@ Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバ�
 - 無許可のDiscord招待リンク検知(`AUTOMOD_INVITE_ALLOWLIST` で自サーバー招待を除外可)→ 10分タイムアウト
 - URL大量投稿検知(`AUTOMOD_URL_LIMIT`、広告/フィッシングURLの連投)→ 10分タイムアウト
 - **招待リンク作成スパム検知**(`AUTOMOD_INVITE_CREATE_LIMIT`/`_WINDOW_MS`、レイド用の大量発行対策)→ 招待削除+10分タイムアウト
+- **1日あたりの最大投稿数**(`AUTOMOD_DAILY_MESSAGE_LIMIT`、既定は無効)。短時間のフラッド検知とは別に、
+  24時間の投稿数が上限に達したら`AUTOMOD_DAILY_MESSAGE_TIMEOUT_MINUTES`分タイムアウトする
+- **警告エスカレーション**: `/warn`の累計回数が`AUTOMOD_WARN_ESCALATION_THRESHOLD`の倍数に達するたびに、
+  自動でタイムアウト(既定)またはキックする(既定は無効)
 
 ### 重度(モデレーターにメンション)
 - 詐欺・フィッシングの疑いがあるリンク/文言検知(Nitro詐欺等の定番パターン+`AUTOMOD_SCAM_EXTRA_KEYWORDS`)→ 自動BAN
@@ -126,6 +136,11 @@ Discordの「鯖タグ(Server Tag/Primary Guild)」機能で、指定サーバ�
   乗っ取られた管理者アカウント等による破壊行為を想定しているため、通常の自動検知と異なり
   **ManageGuild権限保持者は自動的には除外しない**(サーバーオーナーと`AUTOMOD_EXEMPT_ROLE_IDS`のみ除外)。
   ボットに「監査ログを見る」権限が必要
+
+### メッセージ監査ログ(軽度、既定は無効)
+- `LOG_MESSAGE_EDITS` / `LOG_MESSAGE_DELETES` を`true`にすると、メッセージの編集前後・削除内容を
+  ログに残せる。荒らしが規約違反の投稿をしてすぐ削除する行為の追跡に有効だが、通常運用でも
+  頻度が高くログチャンネルが埋まりやすいため既定では無効にしている
 
 ### ニックネーム変更スパム(minor、罰則なしでログのみ)
 - 短時間の連続ニックネーム変更を検知(`AUTOMOD_NICKNAME_CHANGE_LIMIT`/`_WINDOW_MS`)。フィルター回避目的の
@@ -238,11 +253,12 @@ src/
   deploy-commands.ts      スラッシュコマンド登録スクリプト
   types/moderation.ts     モデレーション行為と重大度の定義(拡張ポイント)
   data/
-    db.ts                    .jsonファイルへの永久保存を行う自作DB(ケース履歴/警告/ロックダウン状態)
+    db.ts                    .jsonファイルへの永久保存を行う自作DB(ケース履歴/警告/通報/ロックダウン状態)
     types.ts                  DBスキーマの型定義
   services/
     moderationLog.ts       重大度別ログ送信ロジック(送信のたびにDBへケースを記録)
     memberLog.ts            入退室ログ送信ロジック
+    messageAudit.ts          メッセージ編集/削除ログ(LOG_MESSAGE_EDITS/DELETES)
   automod/
     config.ts               AUTOMOD_* 環境変数の読み込み
     state.ts                 スパム/レイド/招待作成/ニックネーム/Nuke判定用のインメモリ状態管理

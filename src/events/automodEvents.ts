@@ -1,9 +1,11 @@
 import { AuditLogEvent, type Client } from 'discord.js';
 import { runAntiNuke } from '../automod/auditAutomod.js';
+import { automodConfig } from '../automod/config.js';
 import { runInviteAutomod } from '../automod/inviteAutomod.js';
 import { runMemberAutomod } from '../automod/memberAutomod.js';
 import { runNicknameAutomod } from '../automod/memberUpdateAutomod.js';
 import { runMessageAutomod } from '../automod/messageAutomod.js';
+import { logMessageDelete, logMessageEdit } from '../services/messageAudit.js';
 
 export function registerAutomodEvents(client: Client): void {
   client.on('messageCreate', (message) => {
@@ -35,5 +37,15 @@ export function registerAutomodEvents(client: Client): void {
     runAntiNuke(role.guild, AuditLogEvent.RoleDelete, role.id).catch((error) =>
       console.error('[automod] アンチNuke検査(ロール削除)中にエラーが発生しました', error),
     );
+  });
+
+  client.on('messageUpdate', (oldMessage, newMessage) => {
+    if (!automodConfig.messageAudit.logEdits) return;
+    logMessageEdit(oldMessage, newMessage).catch((error) => console.error('[automod] メッセージ編集ログの送信に失敗しました', error));
+  });
+
+  client.on('messageDelete', (message) => {
+    if (!automodConfig.messageAudit.logDeletes) return;
+    logMessageDelete(message).catch((error) => console.error('[automod] メッセージ削除ログの送信に失敗しました', error));
   });
 }

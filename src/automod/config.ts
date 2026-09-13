@@ -85,4 +85,24 @@ export const automodConfig = {
   suspiciousUsername: {
     enabled: optionalBool('AUTOMOD_FLAG_SUSPICIOUS_USERNAME', true),
   },
+  // 1メッセージあたりの最大文字数(超過分は荒らし目的の長文とみなして削除。0で無効)
+  maxMessageLength: optionalInt('AUTOMOD_MAX_MESSAGE_LENGTH', 0),
+  // 1ユーザーが24時間以内に送信できるメッセージ数の上限(短時間のフラッドとは別の
+  // 長期的な過剰投稿を検知する。0で無効)
+  dailyMessage: {
+    limit: optionalInt('AUTOMOD_DAILY_MESSAGE_LIMIT', 0),
+    timeoutMinutes: optionalInt('AUTOMOD_DAILY_MESSAGE_TIMEOUT_MINUTES', 30),
+  },
+  // メッセージの編集・削除をログに残す(荒らしの「投稿してすぐ削除」対策)。
+  // 通常運用では頻度が高くログが埋まりやすいため既定は無効
+  messageAudit: {
+    logEdits: optionalBool('LOG_MESSAGE_EDITS', false),
+    logDeletes: optionalBool('LOG_MESSAGE_DELETES', false),
+  },
+  // 警告(warn)の累計回数がこの値に達するたびに自動でタイムアウト/キックする(0で無効)
+  warnEscalation: {
+    threshold: optionalInt('AUTOMOD_WARN_ESCALATION_THRESHOLD', 0),
+    action: (optional('AUTOMOD_WARN_ESCALATION_ACTION') === 'kick' ? 'kick' : 'timeout') as 'timeout' | 'kick',
+    timeoutMinutes: optionalInt('AUTOMOD_WARN_ESCALATION_TIMEOUT_MINUTES', 60),
+  },
 };

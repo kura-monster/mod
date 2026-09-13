@@ -4,7 +4,7 @@ import type { ActionKey } from '../types/moderation.js';
 import { banMemberSafe, deleteMessageSafe, kickMemberSafe, timeoutMemberSafe } from './actions.js';
 import { automodConfig } from './config.js';
 import { isExemptMember } from './exempt.js';
-import { pushAndGetMessageHistory } from './state.js';
+import { incrementDailyMessageCount, pushAndGetMessageHistory } from './state.js';
 import {
   calcCapsRatio,
   containsScamPattern,
@@ -129,7 +129,32 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 5. メンションスパム
+  // 5. 1日あたりの最大投稿数(短時間のフラッドとは別の、長期的な過剰投稿を検知)
+  if (automodConfig.dailyMessage.limit > 0) {
+    const dailyCount = incrementDailyMessageCount(message.author.id, now);
+    if (dailyCount >= automodConfig.dailyMessage.limit) {
+      await reportAndAct({
+        message,
+        action: 'AUTO_DAILY_MESSAGE_LIMIT',
+        reason: `24時間以内の投稿数が上限(${automodConfig.dailyMessage.limit}件)に達しました`,
+        timeoutMs: automodConfig.dailyMessage.timeoutMinutes * 60 * 1000,
+        extra: { 投稿数: `${dailyCount}件` },
+      });
+      return;
+    }
+  }
+
+  // 6. 最大メッセージ文字数(長文による荒らし・掲示板汚染対策)
+  if (automodConfig.maxMessageLength > 0 && content.length > automodConfig.maxMessageLength) {
+    await reportAndAct({
+      message,
+      action: 'AUTO_MESSAGE_TOO_LONG',
+      reason: `メッセージの文字数(${content.length}文字)が上限(${automodConfig.maxMessageLength}文字)を超えました`,
+    });
+    return;
+  }
+
+  // 7. メンションスパム
   const mentionCount = message.mentions.users.size + message.mentions.roles.size;
   if (mentionCount >= automodConfig.mention.limit) {
     await reportAndAct({
@@ -142,7 +167,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 6. URL大量投稿(広告/フィッシングURLの連投対策。招待リンク以外の一般URLも対象)
+  // 8. URL大量投稿(広告/フィッシングURLの連投対策。招待リンク以外の一般URLも対象)
   const urlCount = countUrls(content);
   if (urlCount >= automodConfig.url.limit) {
     await reportAndAct({
@@ -154,7 +179,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 7. 詐欺・フィッシングの疑いがあるリンク/文言(最優先で重度対応)
+  // 9. 詐欺・フィッシングの疑いがあるリンク/文言(最優先で重度対応)
   if (automodConfig.scamLink.block && containsScamPattern(content, automodConfig.scamLink.extraKeywords)) {
     await reportAndAct({
       message,
@@ -165,7 +190,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 8. 無許可のDiscord招待リンク
+  // 10. 無許可のDiscord招待リンク
   if (automodConfig.invite.block) {
     const codes = extractInviteCodes(content);
     const disallowed = codes.filter((code) => !automodConfig.invite.allowlist.includes(code));
@@ -180,7 +205,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     }
   }
 
-  // 9. 重大NGワード(悪質な差別語・脅迫など、人的対応が必要なもの)
+  // 11. 重大NGワード(悪質な差別語・脅迫など、人的対応が必要なもの)
   const severeWord = matchesBannedWord(content, automodConfig.severeBannedWords);
   if (severeWord) {
     await reportAndAct({
@@ -192,7 +217,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 10. 通常のNGワード・正規表現
+  // 12. 通常のNGワード・正規表現
   const bannedWord = matchesBannedWord(content, automodConfig.bannedWords);
   const regexHit = matchesBannedRegex(content, automodConfig.bannedWordsRegex);
   if (bannedWord || regexHit) {
@@ -204,7 +229,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 11. 大文字乱用(いわゆる叫び)
+  // 13. 大文字乱用(いわゆる叫び)
   if (content.length >= automodConfig.caps.minLength && calcCapsRatio(content) >= automodConfig.caps.ratio) {
     await reportAndAct({
       message,
@@ -214,7 +239,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 12. 絵文字乱用
+  // 14. 絵文字乱用
   if (countEmojis(content) >= automodConfig.emoji.limit) {
     await reportAndAct({
       message,
@@ -224,7 +249,7 @@ export async function runMessageAutomod(message: Message): Promise<void> {
     return;
   }
 
-  // 13. Zalgo(装飾)テキスト
+  // 15. Zalgo(装飾)テキスト
   if (automodConfig.zalgo.enabled && isZalgo(content, automodConfig.zalgo.maxMarksPerChar)) {
     await reportAndAct({
       message,

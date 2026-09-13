@@ -25,6 +25,8 @@ import { invites } from './moderation/invites.js';
 import { userinfo } from './moderation/userinfo.js';
 import { modstats } from './moderation/modstats.js';
 import { adminLogin } from './moderation/adminLogin.js';
+import { report } from './moderation/report.js';
+import { reports } from './moderation/reports.js';
 
 const list: Command[] = [
   // 軽度
@@ -55,6 +57,9 @@ const list: Command[] = [
   userinfo,
   modstats,
   adminLogin,
+  reports,
+  // 全メンバーが使える通報コマンド(権限制限なし)
+  report,
 ];
 
 export const commands = new Collection<string, Command>(list.map((command) => [command.data.name, command]));

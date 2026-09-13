@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { optional } from '../config.js';
-import type { DatabaseSchema, ModerationCaseRecord, WarningRecord } from './types.js';
+import type { DatabaseSchema, ModerationCaseRecord, ReportRecord, WarningRecord } from './types.js';
 
 /**
  * 全データを1つの .json ファイルに永続化する、依存ライブラリ不要の簡易DB。
@@ -19,8 +19,10 @@ const DB_PATH = optional('DB_FILE_PATH')
 const DEFAULT_DB: DatabaseSchema = {
   nextCaseId: 1,
   nextWarningId: 1,
+  nextReportId: 1,
   cases: [],
   warnings: {},
+  reports: [],
   lockdown: {},
   settingsOverrides: {},
 };
@@ -105,6 +107,20 @@ export async function addWarning(
 export async function getWarnings(guildId: string, userId: string): Promise<WarningRecord[]> {
   const db = await load();
   return db.warnings[guildId]?.[userId] ?? [];
+}
+
+export async function addReport(record: Omit<ReportRecord, 'id'>): Promise<ReportRecord> {
+  const db = await load();
+  const full: ReportRecord = { ...record, id: db.nextReportId };
+  db.reports.push(full);
+  db.nextReportId += 1;
+  queueSave();
+  return full;
+}
+
+export async function getReportsForUser(guildId: string, targetId: string): Promise<ReportRecord[]> {
+  const db = await load();
+  return db.reports.filter((r) => r.guildId === guildId && r.targetId === targetId);
 }
 
 export async function setLockdownLevel(guildId: string, level: number): Promise<void> {

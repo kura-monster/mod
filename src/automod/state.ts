@@ -77,6 +77,27 @@ export function pushAndGetNukeActionHistory(key: string, timestamp: number): num
   return nukeActionTracker.pushAndGet(key, timestamp);
 }
 
+// 1日あたりの投稿数カウント。毎メッセージのタイムスタンプを保持すると上限が大きいときに
+// メモリを食うため、カウント+ウィンドウ開始時刻だけを持つ軽量な方式にする
+interface DailyMessageCounter {
+  count: number;
+  windowStart: number;
+}
+
+const DAILY_MESSAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const dailyMessageCounters = new Map<string, DailyMessageCounter>();
+
+/** ユーザーの直近24時間の投稿数を1増やし、現在の合計を返す */
+export function incrementDailyMessageCount(userId: string, now: number): number {
+  const existing = dailyMessageCounters.get(userId);
+  if (!existing || now - existing.windowStart > DAILY_MESSAGE_WINDOW_MS) {
+    dailyMessageCounters.set(userId, { count: 1, windowStart: now });
+    return 1;
+  }
+  existing.count += 1;
+  return existing.count;
+}
+
 // 使われなくなった履歴をメモリから定期的に掃除する
 setInterval(
   () => {
@@ -85,6 +106,11 @@ setInterval(
       const last = history.at(-1);
       if (!last || now - last.timestamp > MESSAGE_HISTORY_MAX_MS) {
         userMessageHistory.delete(userId);
+      }
+    }
+    for (const [userId, counter] of dailyMessageCounters) {
+      if (now - counter.windowStart > DAILY_MESSAGE_WINDOW_MS) {
+        dailyMessageCounters.delete(userId);
       }
     }
     joinTracker.cleanup(now);
