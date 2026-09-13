@@ -16,6 +16,15 @@ npm run build
 npm start
 ```
 
+### ホスティングパネル(MrtCloud等)での「起動ファイル」
+
+`npm start`を経由せず、パネルが直接 `node <ファイル>` の形で起動するタイプの環境では、
+**`bootstrap.js`(プロジェクト直下)を起動ファイルに指定すること**。`dist/index.js`を
+直接指定すると、パネル側が`npm install`を省略した場合にビルドが一切走らず、
+古い`dist/`のまま動き続けてしまう([bootstrap.js](bootstrap.js)を参照)。
+`bootstrap.js`はTypeScriptのビルド成果物ではない、常に存在するプレーンなJSファイルで、
+起動時に必ず`npm run build`を実行してから本体(`dist/index.js`)を読み込む。
+
 ## 環境変数
 
 `.env.example` を参照。
