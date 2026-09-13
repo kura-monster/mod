@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { getWarnings } from '../../data/db.js';
 import type { Command } from '../types.js';
 
@@ -15,7 +21,7 @@ export const warnings: Command = {
     const history = await getWarnings(interaction.guild!.id, target.id);
 
     if (history.length === 0) {
-      await interaction.reply({ content: `${target} に警告履歴はありません。`, ephemeral: true });
+      await interaction.reply({ content: `${target} に警告履歴はありません。`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -26,11 +32,11 @@ export const warnings: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(0xf1c40f)
-      .setTitle(`⚠️ ${target.tag} の警告履歴(累計 ${history.length} 回)`)
+      .setTitle(`${target.tag} の警告履歴(累計 ${history.length} 回)`)
       .setDescription(lines.join('\n\n'))
       .setFooter({ text: history.length > 10 ? '直近10件を表示しています' : '全件表示しています' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

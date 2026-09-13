@@ -1,4 +1,4 @@
-import { type ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { logModerationAction } from '../../services/moderationLog.js';
 import type { Command } from '../types.js';
 
@@ -26,6 +26,9 @@ export const voiceUndeafen: Command = {
       reason,
     });
 
-    await interaction.reply({ content: `${target} のサーバースピーカーミュートを解除しました。`, ephemeral: true });
+    await interaction.reply({
+      content: `${target} のサーバースピーカーミュートを解除しました。`,
+      flags: MessageFlags.Ephemeral,
+    });
   },
 };

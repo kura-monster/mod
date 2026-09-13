@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { automodConfig } from '../../automod/config.js';
 import type { Command } from '../types.js';
 
@@ -14,7 +20,7 @@ export const automodStatus: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(c.enabled ? 0x2ecc71 : 0x95a5a6)
-      .setTitle('🛡️ 自動検知(荒らし対策)の設定状況')
+      .setTitle('自動検知(荒らし対策)の設定状況')
       .setDescription(
         `有効: **${c.enabled ? 'ON' : 'OFF'}** / モード: **${c.logOnly ? 'ログのみ' : '自動対応あり'}**\n設定は \`AUTOMOD_*\` 環境変数で変更してください。`,
       )
@@ -66,6 +72,6 @@ export const automodStatus: Command = {
         },
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

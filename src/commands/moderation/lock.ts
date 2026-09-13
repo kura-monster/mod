@@ -1,6 +1,7 @@
 import {
   ChannelType,
   type ChatInputCommandInteraction,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   type TextChannel,
@@ -37,6 +38,6 @@ export const lock: Command = {
       reason,
     });
 
-    await interaction.reply({ content: `${channel} をロックしました。`, ephemeral: true });
+    await interaction.reply({ content: `${channel} をロックしました。`, flags: MessageFlags.Ephemeral });
   },
 };

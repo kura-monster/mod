@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import type { Command } from '../types.js';
 
 export const invites: Command = {
@@ -12,7 +18,7 @@ export const invites: Command = {
     const guildInvites = await interaction.guild!.invites.fetch().catch(() => null);
 
     if (!guildInvites || guildInvites.size === 0) {
-      await interaction.reply({ content: '現在、有効な招待リンクはありません。', ephemeral: true });
+      await interaction.reply({ content: '現在、有効な招待リンクはありません。', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -26,10 +32,10 @@ export const invites: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
-      .setTitle(`📨 有効な招待リンク(${guildInvites.size}件)`)
+      .setTitle(`有効な招待リンク(${guildInvites.size}件)`)
       .setDescription(lines.join('\n'))
       .setFooter({ text: guildInvites.size > 15 ? '使用回数の多い上位15件を表示しています' : '全件表示しています' });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

@@ -112,10 +112,10 @@ async function saveField(field, value, inputEl) {
       body: JSON.stringify({ key: field.key, value }),
     });
     state.values = result.values;
-    status.textContent = '✅';
+    status.textContent = '';
     showToast(`${field.label} を更新しました`, 'success');
   } catch (error) {
-    status.textContent = '⚠️';
+    status.textContent = '';
     showToast(error.message, 'error');
   } finally {
     setTimeout(() => {

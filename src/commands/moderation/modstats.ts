@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { getCasesSince } from '../../data/db.js';
 import type { Command } from '../types.js';
 
@@ -17,7 +23,7 @@ export const modstats: Command = {
     const cases = await getCasesSince(interaction.guild!.id, Date.now() - days * 24 * 60 * 60 * 1000);
 
     if (cases.length === 0) {
-      await interaction.reply({ content: `直近${days}日間の対応記録はありません。`, ephemeral: true });
+      await interaction.reply({ content: `直近${days}日間の対応記録はありません。`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -37,7 +43,7 @@ export const modstats: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(0x9b59b6)
-      .setTitle(`📊 モデレーション統計(直近${days}日間)`)
+      .setTitle(`モデレーション統計(直近${days}日間)`)
       .addFields(
         { name: '総件数', value: `${cases.length}件`, inline: true },
         { name: '軽度', value: `${bySeverity.minor ?? 0}件`, inline: true },
@@ -46,6 +52,6 @@ export const modstats: Command = {
         { name: '対応件数の多い実行者(ボット自身=自動検知を含む)', value: topModerators },
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

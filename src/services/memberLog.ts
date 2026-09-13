@@ -12,7 +12,7 @@ export async function logMemberJoin(member: GuildMember): Promise<void> {
 
   const embed = new EmbedBuilder()
     .setColor(0x2ecc71)
-    .setTitle('📥 入室')
+    .setTitle('入室')
     .setThumbnail(member.user.displayAvatarURL())
     .addFields(
       { name: 'ユーザー', value: `${member.user} (${member.user.tag})`, inline: true },
@@ -39,7 +39,7 @@ export async function logMemberLeave(member: GuildMember | PartialGuildMember): 
 
   const embed = new EmbedBuilder()
     .setColor(0xe74c3c)
-    .setTitle('📤 退出')
+    .setTitle('退出')
     .setThumbnail(member.user.displayAvatarURL())
     .addFields(
       { name: 'ユーザー', value: `${member.user} (${member.user.tag})`, inline: true },

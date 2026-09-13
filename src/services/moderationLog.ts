@@ -58,7 +58,7 @@ export async function logModerationAction(params: LogModerationActionParams): Pr
 
   const embed = new EmbedBuilder()
     .setColor(SEVERITY_COLOR[meta.severity])
-    .setTitle(`${meta.emoji} ${meta.label}`)
+    .setTitle(meta.label)
     .addFields(
       { name: '対象', value: formatTarget(target), inline: true },
       { name: '実行者', value: `${moderator} (${moderator.tag})`, inline: true },

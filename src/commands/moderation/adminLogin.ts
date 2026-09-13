@@ -1,4 +1,4 @@
-import { type ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { webConfig } from '../../web/config.js';
 import { createLoginCode } from '../../web/loginCodes.js';
 import type { Command } from '../types.js';
@@ -15,8 +15,8 @@ export const adminLogin: Command = {
     const loginUrl = `${webConfig.baseUrl}/login`;
 
     await interaction.reply({
-      content: `🔑 管理画面ログイン用のワンタイムコード: **${code}**\n5分間だけ有効です。${loginUrl} で入力してください。`,
-      ephemeral: true,
+      content: `管理画面ログイン用のワンタイムコード: **${code}**\n5分間だけ有効です。${loginUrl} で入力してください。`,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

@@ -1,6 +1,7 @@
 import {
   ChannelType,
   type ChatInputCommandInteraction,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   type TextChannel,
@@ -42,6 +43,9 @@ export const slowmode: Command = {
       extra: { 秒数: `${seconds}秒` },
     });
 
-    await interaction.reply({ content: `${channel} のスローモードを ${seconds} 秒に設定しました。`, ephemeral: true });
+    await interaction.reply({
+      content: `${channel} のスローモードを ${seconds} 秒に設定しました。`,
+      flags: MessageFlags.Ephemeral,
+    });
   },
 };

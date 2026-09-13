@@ -1,4 +1,4 @@
-import { type ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { logModerationAction } from '../../services/moderationLog.js';
 import type { Command } from '../types.js';
 
@@ -37,6 +37,6 @@ export const ban: Command = {
       reason,
     });
 
-    await interaction.reply({ content: `${target} をBANしました。`, ephemeral: true });
+    await interaction.reply({ content: `${target} をBANしました。`, flags: MessageFlags.Ephemeral });
   },
 };

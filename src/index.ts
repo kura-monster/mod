@@ -40,11 +40,11 @@ await startWebPanel(client);
 
 // 起動のたびに自動でスラッシュコマンドを登録する(npm run deploy-commandsを毎回手動実行しなくてよい)
 try {
-  console.log(`⏳ ${commands.size} 件のスラッシュコマンドを登録しています...`);
+  console.log(`${commands.size} 件のスラッシュコマンドを登録しています...`);
   await deploySlashCommands();
-  console.log('✅ スラッシュコマンドの登録が完了しました。');
+  console.log('スラッシュコマンドの登録が完了しました。');
 } catch (error) {
-  console.error('❌ スラッシュコマンドの登録に失敗しました', error);
+  console.error('スラッシュコマンドの登録に失敗しました', error);
 }
 
 client.login(config.token);

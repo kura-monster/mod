@@ -52,7 +52,7 @@ function renderLoginPage(error?: string): string {
 </head>
 <body>
 <div class="login-wrap">
-  <h1>🛡️ Rula_KuraBot 管理画面</h1>
+  <h1>Rula_KuraBot 管理画面</h1>
   <p>Discordサーバーで <code>/admin-login</code> コマンドを実行すると、
   ワンタイムコードが表示されます(管理者権限を持つメンバーのみ実行可能)。
   発行から5分以内に、そのコードを下に入力してください。</p>

@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder, type TextChannel } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+  type TextChannel,
+} from 'discord.js';
 import { logModerationAction } from '../../services/moderationLog.js';
 import type { Command } from '../types.js';
 
@@ -29,6 +35,6 @@ export const purge: Command = {
       extra: { 削除件数: `${deleted.size}件` },
     });
 
-    await interaction.reply({ content: `${deleted.size} 件のメッセージを削除しました。`, ephemeral: true });
+    await interaction.reply({ content: `${deleted.size} 件のメッセージを削除しました。`, flags: MessageFlags.Ephemeral });
   },
 };

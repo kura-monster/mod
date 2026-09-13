@@ -1,6 +1,7 @@
 import {
   type ChatInputCommandInteraction,
   GuildVerificationLevel,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -46,9 +47,9 @@ export const raidLockdown: Command = {
     await interaction.reply({
       content:
         state === 'on'
-          ? '🚨 サーバーをロックダウンしました(参加認証レベル: 最高)。'
-          : '✅ ロックダウンを解除しました(参加認証レベルを元に戻しました)。',
-      ephemeral: true,
+          ? 'サーバーをロックダウンしました(参加認証レベル: 最高)。'
+          : 'ロックダウンを解除しました(参加認証レベルを元に戻しました)。',
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

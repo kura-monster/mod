@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { getWarnings } from '../../data/db.js';
 import type { Command } from '../types.js';
 
@@ -24,7 +30,7 @@ export const userinfo: Command = {
 
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
-      .setTitle(`👤 ${target.tag}`)
+      .setTitle(`${target.tag}`)
       .setThumbnail(target.displayAvatarURL())
       .addFields(
         { name: 'ユーザーID', value: target.id, inline: true },
@@ -39,6 +45,6 @@ export const userinfo: Command = {
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

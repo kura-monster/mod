@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import {
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { getCase } from '../../data/db.js';
 import { ACTIONS, type ActionKey, SEVERITY_COLOR, SEVERITY_LABEL, type Severity } from '../../types/moderation.js';
 import type { Command } from '../types.js';
@@ -16,16 +22,16 @@ export const caseLookup: Command = {
     const record = await getCase(id);
 
     if (!record || record.guildId !== interaction.guild!.id) {
-      await interaction.reply({ content: `ケース #${id} は見つかりませんでした。`, ephemeral: true });
+      await interaction.reply({ content: `ケース #${id} は見つかりませんでした。`, flags: MessageFlags.Ephemeral });
       return;
     }
 
-    const meta = ACTIONS[record.action as ActionKey] as { label: string; emoji: string } | undefined;
+    const meta = ACTIONS[record.action as ActionKey] as { label: string } | undefined;
     const severity = record.severity as Severity;
 
     const embed = new EmbedBuilder()
       .setColor(SEVERITY_COLOR[severity] ?? 0x95a5a6)
-      .setTitle(`${meta?.emoji ?? '📄'} ケース #${record.id} — ${meta?.label ?? record.action}`)
+      .setTitle(`ケース #${record.id} — ${meta?.label ?? record.action}`)
       .addFields(
         { name: '対象', value: record.targetLabel, inline: true },
         { name: '実行者', value: `<@${record.moderatorId}> (${record.moderatorTag})`, inline: true },
@@ -34,6 +40,6 @@ export const caseLookup: Command = {
         { name: '日時', value: `<t:${Math.floor(record.timestamp / 1000)}:F>` },
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };
