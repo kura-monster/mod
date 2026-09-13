@@ -29,15 +29,7 @@ function renderLoginPage(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Rula_KuraBot 管理画面ログイン</title>
 <link rel="stylesheet" href="/style.css" />
-<style>
-  .login-wrap { max-width: 420px; margin: 80px auto; padding: 0 20px; }
-  .login-wrap h1 { font-size: 20px; margin-bottom: 8px; }
-  .login-wrap p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
-  .login-wrap form { margin-top: 20px; display: flex; gap: 8px; }
-  .login-wrap input { flex: 1; font-size: 18px; letter-spacing: 4px; text-align: center; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); }
-  .login-wrap button { padding: 10px 20px; border-radius: 6px; border: none; background: var(--accent); color: white; cursor: pointer; font-size: 14px; }
-  .login-error { color: var(--danger); margin-top: 12px; font-size: 13px; display: none; }
-</style>
+<link rel="stylesheet" href="/login.css" />
 </head>
 <body>
 <div class="login-wrap">
@@ -45,41 +37,13 @@ function renderLoginPage(): string {
   <p>Discordサーバーで <code>/admin-login</code> コマンドを実行すると、
   ワンタイムコードが表示されます(管理者権限を持つメンバーのみ実行可能)。
   発行から5分以内に、そのコードを下に入力してください。</p>
-  <form id="login-form">
+  <form id="login-form" method="POST" action="/login">
     <input type="text" name="code" id="code-input" inputmode="numeric" placeholder="000000" autofocus required autocomplete="one-time-code" />
     <button type="submit">ログイン</button>
   </form>
   <p class="login-error" id="login-error"></p>
 </div>
-<script>
-  document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errorEl = document.getElementById('login-error');
-    errorEl.style.display = 'none';
-    const code = document.getElementById('code-input').value.trim();
-
-    try {
-      const res = await fetch('/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data.token) {
-        errorEl.textContent = data.error || 'ログインに失敗しました。';
-        errorEl.style.display = 'block';
-        return;
-      }
-
-      localStorage.setItem('rula_admin_token', data.token);
-      window.location.href = '/';
-    } catch {
-      errorEl.textContent = 'ログインに失敗しました。ネットワークを確認してください。';
-      errorEl.style.display = 'block';
-    }
-  });
-</script>
+<script src="/login.js"></script>
 </body>
 </html>`;
 }
@@ -122,6 +86,9 @@ export async function startWebPanel(client: Client): Promise<void> {
 
   app.use(helmet());
   app.use(express.json());
+  // login-form.jsが読み込めない万一の場合に備え、素のHTMLフォーム送信(urlencoded)でも
+  // 動くようにしておく(通常はJSがJSONで/loginにfetchする)
+  app.use(express.urlencoded({ extended: false }));
 
   // キャッシュ経由で古いページが再生されるのを防ぐ
   app.use((_req, res, next) => {
