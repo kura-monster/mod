@@ -194,6 +194,15 @@ export async function startWebPanel(client: Client): Promise<void> {
 
   app.get('/', (req, res) => {
     if (!req.session?.userId) {
+      const cookieNames = (req.headers.cookie ?? '')
+        .split(';')
+        .map((c) => c.split('=')[0]?.trim())
+        .filter(Boolean);
+      console.warn('[web] / でセッションなしと判定しました', {
+        cookieNamesPresent: cookieNames,
+        hasSessionCookie: cookieNames.includes('session'),
+        sessionIsNew: req.session?.isNew,
+      });
       res.redirect('/login');
       return;
     }
