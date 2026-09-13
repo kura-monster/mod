@@ -76,6 +76,15 @@ export async function startWebPanel(client: Client): Promise<void> {
     }),
   );
 
+  // ブラウザ(またはCDN)が/loginの302応答をキャッシュしてしまうと、次回訪問時に
+  // 新しいstateを発行する処理自体が実行されず、古いCookie/stateが再生され続けて
+  // 認証が永久に失敗する原因になっていた。管理画面は小さく低トラフィックなので、
+  // 静的ファイルも含めて全レスポンスにキャッシュ禁止を適用してしまって問題ない
+  app.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    next();
+  });
+
   app.get('/login', (req, res) => {
     // OAuth2のログインCSRF(state固定)対策。/callbackで値が一致することを確認する
     const state = crypto.randomBytes(16).toString('hex');
