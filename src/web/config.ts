@@ -11,8 +11,8 @@ export const webConfig = {
   enabled: optionalBool('ADMIN_PANEL_ENABLED', true),
   port,
   host,
+  // /admin-loginコマンドの返信でログインURLを案内する際に使う(未設定でもログイン自体は可能)
   baseUrl: optional('ADMIN_PANEL_BASE_URL') ?? `http://localhost:${port}`,
-  clientSecret: optional('DISCORD_CLIENT_SECRET'),
   // 未設定の場合は data/db.json に永久保存された値を使う(server.tsで解決する)
   sessionSecretFromEnv: optional('SESSION_SECRET'),
 };

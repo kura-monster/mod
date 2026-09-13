@@ -24,6 +24,7 @@ import { automodStatus } from './moderation/automodStatus.js';
 import { invites } from './moderation/invites.js';
 import { userinfo } from './moderation/userinfo.js';
 import { modstats } from './moderation/modstats.js';
+import { adminLogin } from './moderation/adminLogin.js';
 
 const list: Command[] = [
   // 軽度
@@ -53,6 +54,7 @@ const list: Command[] = [
   invites,
   userinfo,
   modstats,
+  adminLogin,
 ];
 
 export const commands = new Collection<string, Command>(list.map((command) => [command.data.name, command]));

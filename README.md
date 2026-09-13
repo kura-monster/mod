@@ -72,6 +72,7 @@ npm start
 - `/userinfo [user]` — アカウント作成日・参加日・警告累計・ロールを表示
 - `/invites` — サーバーの有効な招待リンク一覧(作成者・使用回数)を表示。招待作成スパム対策の確認用
 - `/automod-status` — 現在の `AUTOMOD_*` 設定値を一覧表示(設定変更はコマンドではなく環境変数で行う)
+- `/admin-login` — 管理画面ログイン用のワンタイムコード(5分間有効)を発行する
 
 ## 鯖タグ(Server Tag)連動ロール
 
@@ -163,25 +164,26 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
 
 ### セットアップ
 
-1. [Discord Developer Portal](https://discord.com/developers/applications) でこのボットのアプリケーションを開き、
-   **OAuth2** タブで以下を行う
-   - **Client Secret** を控える(`DISCORD_CLIENT_SECRET` に設定。Botトークンとは別物)
-   - **Redirects** に `<ADMIN_PANEL_BASE_URL>/callback` を追加(例: `http://localhost:3000/callback`。
-     本番でホスティングパネルが割り当てたURLを使う場合はそのURLに合わせる)
-2. `.env` に以下を設定する
+1. `.env` に以下を設定する
 
    ```
-   GUILD_ID=対象サーバーのID(管理者権限の確認に使うため必須)
-   DISCORD_CLIENT_SECRET=(手順1で控えたもの)
-   ADMIN_PANEL_BASE_URL=http://localhost:3000(本番は実際の公開URL)
+   GUILD_ID=対象サーバーのID(必須)
+   ADMIN_PANEL_BASE_URL=http://localhost:3000(本番は実際の公開URL。/admin-loginの案内に使うだけ)
    ADMIN_PANEL_PORT=3000
    SESSION_SECRET=適当なランダム文字列(未設定でも data/db.json に自動生成した鍵を保存して使い回すので、
    再起動のたびに全員ログアウトされることはない。複数環境で共有したい場合などに明示的に設定する)
    ```
-3. `npm run dev` または `npm start` でボットと同時に管理画面が起動する
-4. ブラウザで `ADMIN_PANEL_BASE_URL` を開く → `/login` に自動転送 → Discordでログイン →
-   対象サーバー(`GUILD_ID`)で **管理者(Administrator)権限** を持つアカウントのみアクセス可能
-   (それ以外は403エラーになる)
+2. `npm run dev` または `npm start` でボットと同時に管理画面が起動する
+3. Discordサーバー上で **管理者(Administrator)権限を持つメンバーが `/admin-login` を実行**すると、
+   5分間だけ有効なワンタイムコード(6桁)がその人にだけ見える形で返信される
+4. ブラウザで `ADMIN_PANEL_BASE_URL` (またはその`/login`)を開き、発行されたコードを入力するとログインできる
+
+**ログイン方式についての補足**: 当初はDiscord OAuth2でのログインを実装していたが、一部の
+ホスティング環境(外部ドメインへのリダイレクトを挟む構成)でCookieが正しく往復せず、
+ログインが恒久的に失敗する問題が起きたため、外部リダイレクトを経由しない
+この方式(Discordスラッシュコマンドで発行したワンタイムコードを自サイトのフォームに入力する)
+に切り替えた。コードは使い捨て・5分で失効し、発行自体が`/admin-login`コマンドの権限設定
+(Administrator限定)で守られている。
 
 ### できること
 - **設定**タブ: `config.ts` / `automod/config.ts` の主要項目(ログ送信先チャンネル、しきい値、
@@ -204,10 +206,9 @@ Bot本体と同じプロセスでExpressサーバーが起動し、`AUTOMOD_*` �
 - **ステートレスなセッション**: `express-session`(既定でサーバーのメモリ上にセッションを保持する)
   ではなく`cookie-session`を採用し、ログイン情報を署名付きCookie自体に持たせている。
   サーバー側に状態を持たないため、プロセスが再起動してもログイン状態が失われない
-  (再起動のたびに全員ログアウトされ、延々と再認証を求められる不具合の根本原因だった)
 - `SESSION_SECRET`未設定時は`data/db.json`に署名鍵を保存して使い回す(Cookie自体の署名検証に必要)
-- **OAuth2のログインCSRF対策**: `/login`発行時に`state`をCookieへ格納し、`/callback`で一致を
-  検証してから処理する(不一致・欠落時は400エラー)
+- **ワンタイムコード方式のログイン**: `/admin-login`(Administrator権限限定)が発行する
+  6桁コードは5分で失効・1回使うと即座に無効化される使い捨て
 - **XSS対策**: 管理画面のケース履歴テーブルは、Discordメッセージ内容やニックネーム由来の値を
   表示するため、HTMLエスケープしてから描画する([app.js](src/web/public/app.js))
 - **HTTPセキュリティヘッダー**: `helmet`ミドルウェアでX-Frame-Options等の基本的なヘッダーを付与
@@ -253,11 +254,12 @@ src/
   events/                  ready / 入退室ログ / インタラクション / 自動検知の各イベント登録
   commands/moderation/      各スラッシュコマンドの実装
   web/
-    config.ts                ADMIN_PANEL_* / DISCORD_CLIENT_SECRET / SESSION_SECRET の読み込み
+    config.ts                ADMIN_PANEL_* / SESSION_SECRET の読み込み
+    loginCodes.ts             /admin-login用ワンタイムコードの発行・検証(インメモリ、5分で失効)
     settingsSchema.ts         管理画面で編集できる設定項目の一覧(拡張ポイント)
     pathUtil.ts                'automod.duplicate.limit'のようなドットパスの取得/設定ユーティリティ
     validate.ts                 設定値の型バリデーション
     configBridge.ts              settingsSchema⇔config/automodConfigの橋渡し、DBへの永続化
-    server.ts                    Express製サーバー本体(OAuth2ログイン・設定/統計API)
+    server.ts                    Express製サーバー本体(コードログイン・設定/統計API)
     public/                       フロントエンド(素のHTML/CSS/JS、ビルド不要)
 ```

@@ -1,14 +1,14 @@
-import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cookieSession from 'cookie-session';
-import { PermissionFlagsBits, type Client } from 'discord.js';
+import type { Client } from 'discord.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { config } from '../config.js';
 import { getCasesSince, getOrCreatePersistedSessionSecret, getRecentCases } from '../data/db.js';
 import { getEffectiveSettings, updateSettingByKey } from './configBridge.js';
 import { webConfig } from './config.js';
+import { consumeLoginCode } from './loginCodes.js';
 import { SETTINGS_SCHEMA } from './settingsSchema.js';
 
 // @types/cookie-session は CookieSessionObject をグローバル名前空間に宣言しているため、
@@ -18,13 +18,10 @@ declare global {
     interface CookieSessionObject {
       userId?: string;
       username?: string;
-      // OAuth2のログインCSRF対策用。/loginで発行し/callbackで一致を確認したら消す
-      oauthState?: string;
     }
   }
 }
 
-const DISCORD_API = 'https://discord.com/api/v10';
 const PUBLIC_DIR = fileURLToPath(new URL('./public', import.meta.url));
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -35,22 +32,52 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   res.status(401).json({ error: '認証が必要です' });
 }
 
+function renderLoginPage(error?: string): string {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rula_KuraBot 管理画面ログイン</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .login-wrap { max-width: 420px; margin: 80px auto; padding: 0 20px; }
+  .login-wrap h1 { font-size: 20px; margin-bottom: 8px; }
+  .login-wrap p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+  .login-wrap form { margin-top: 20px; display: flex; gap: 8px; }
+  .login-wrap input { flex: 1; font-size: 18px; letter-spacing: 4px; text-align: center; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); }
+  .login-wrap button { padding: 10px 20px; border-radius: 6px; border: none; background: var(--accent); color: white; cursor: pointer; font-size: 14px; }
+  .login-error { color: var(--danger); margin-top: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <h1>🛡️ Rula_KuraBot 管理画面</h1>
+  <p>Discordサーバーで <code>/admin-login</code> コマンドを実行すると、
+  ワンタイムコードが表示されます(管理者権限を持つメンバーのみ実行可能)。
+  発行から5分以内に、そのコードを下に入力してください。</p>
+  <form method="POST" action="/login">
+    <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autofocus required />
+    <button type="submit">ログイン</button>
+  </form>
+  ${error ? `<p class="login-error">${error}</p>` : ''}
+</div>
+</body>
+</html>`;
+}
+
 export async function startWebPanel(client: Client): Promise<void> {
   if (!webConfig.enabled) {
     console.log('[web] 管理画面は無効化されています(ADMIN_PANEL_ENABLED=false)');
     return;
   }
-  if (!webConfig.clientSecret) {
-    console.error('[web] DISCORD_CLIENT_SECRET が未設定のため管理画面を起動できません');
-    return;
-  }
   if (!config.guildId) {
-    console.error('[web] GUILD_ID が未設定のため管理画面を起動できません(権限確認に対象サーバーの指定が必要)');
+    console.error('[web] GUILD_ID が未設定のため管理画面を起動できません(対象サーバーの指定が必要)');
     return;
   }
 
   // SESSION_SECRETが未設定でも、再起動のたびにログインが無効化され続けないよう
-  // DBに永久保存した値を使い回す(「認証しても認証しても弾かれる」問題の主因だった)
+  // DBに永久保存した値を使い回す
   const sessionSecret = webConfig.sessionSecretFromEnv ?? (await getOrCreatePersistedSessionSecret());
   if (!webConfig.sessionSecretFromEnv) {
     console.log('[web] SESSION_SECRET未設定のため、data/db.jsonに保存した鍵を使用します(再起動しても維持されます)');
@@ -62,9 +89,9 @@ export async function startWebPanel(client: Client): Promise<void> {
 
   app.use(helmet());
   app.use(express.json());
-  // サーバー側にセッションを持たない、署名付きCookieのみの方式(cookie-session)を採用。
-  // express-sessionの既定(MemoryStore)だとプロセス再起動でログイン状態が全て消え、
-  // 「認証しても認証しても弾かれる」原因になっていたため、再起動の影響を受けない構成にした。
+  app.use(express.urlencoded({ extended: false }));
+  // サーバー側にセッションを持たない、署名付きCookieのみの方式。プロセス再起動があっても
+  // ログイン状態が失われない
   app.use(
     cookieSession({
       name: 'session',
@@ -76,117 +103,27 @@ export async function startWebPanel(client: Client): Promise<void> {
     }),
   );
 
-  // ブラウザ(またはCDN)が/loginの302応答をキャッシュしてしまうと、次回訪問時に
-  // 新しいstateを発行する処理自体が実行されず、古いCookie/stateが再生され続けて
-  // 認証が永久に失敗する原因になっていた。管理画面は小さく低トラフィックなので、
-  // 静的ファイルも含めて全レスポンスにキャッシュ禁止を適用してしまって問題ない
+  // キャッシュ経由で古いページ/Cookieが再生されるのを防ぐ
   app.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     next();
   });
 
-  app.get('/login', (req, res) => {
-    // OAuth2のログインCSRF(state固定)対策。/callbackで値が一致することを確認する
-    const state = crypto.randomBytes(16).toString('hex');
-    if (req.session) req.session.oauthState = state;
-
-    console.log('[web] /login でstateを発行しました', {
-      statePrefix: state.slice(0, 8),
-      sessionIsNewBeforeAssign: req.session?.isNew,
-      sessionPopulatedAfterAssign: req.session?.isPopulated,
-    });
-
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: `${webConfig.baseUrl}/callback`,
-      response_type: 'code',
-      scope: 'identify',
-      state,
-    });
-    res.redirect(`https://discord.com/oauth2/authorize?${params.toString()}`);
+  app.get('/login', (_req, res) => {
+    res.send(renderLoginPage());
   });
 
-  app.get('/callback', async (req, res) => {
-    const { code, state } = req.query;
+  app.post('/login', (req, res) => {
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+    const entry = consumeLoginCode(code);
 
-    if (typeof state !== 'string' || !req.session?.oauthState || state !== req.session.oauthState) {
-      // cookie-sessionは署名検証に失敗しても「空の新規セッション」を作って返すため、
-      // req.session != null だけでは「Cookieが正しく検証できたか」を判別できない。
-      // isNew/isPopulatedと生のCookie名の有無まで見て切り分ける(値自体は出さない)
-      const cookieNames = (req.headers.cookie ?? '')
-        .split(';')
-        .map((c) => c.split('=')[0]?.trim())
-        .filter(Boolean);
-      console.warn('[web] state検証に失敗しました', {
-        queryStatePrefix: typeof state === 'string' ? state.slice(0, 8) : null,
-        cookieNamesPresent: cookieNames,
-        hasSessionCookie: cookieNames.includes('session'),
-        hasSessionSigCookie: cookieNames.includes('session.sig'),
-        sessionIsNew: req.session?.isNew,
-        sessionIsPopulated: req.session?.isPopulated,
-        hasStoredState: Boolean(req.session?.oauthState),
-        queryStateReceived: typeof state === 'string',
-      });
-      res
-        .status(400)
-        .send('認証セッションが無効です(有効期限切れ、または不正なリクエストの可能性)。もう一度 /login からやり直してください。');
-      return;
-    }
-    req.session.oauthState = undefined;
-
-    if (typeof code !== 'string') {
-      res.status(400).send('認証コードがありません。もう一度 /login からやり直してください。');
+    if (!entry) {
+      res.status(401).send(renderLoginPage('コードが無効か、有効期限が切れています。Discordで /admin-login を実行し直してください。'));
       return;
     }
 
-    try {
-      const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: config.clientId,
-          client_secret: webConfig.clientSecret!,
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: `${webConfig.baseUrl}/callback`,
-        }),
-      });
-
-      if (!tokenRes.ok) {
-        throw new Error(`トークン取得に失敗しました (status=${tokenRes.status})`);
-      }
-      const tokenData = (await tokenRes.json()) as { access_token: string };
-
-      const userRes = await fetch(`${DISCORD_API}/users/@me`, {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
-      if (!userRes.ok) {
-        throw new Error(`ユーザー情報取得に失敗しました (status=${userRes.status})`);
-      }
-      const user = (await userRes.json()) as { id: string; username: string };
-
-      const guild = client.guilds.cache.get(config.guildId!);
-      if (!guild) {
-        res
-          .status(503)
-          .send('ボットが対象サーバーに接続できていません。起動直後の場合は数秒待って再度お試しください。');
-        return;
-      }
-
-      const member = await guild.members.fetch(user.id).catch(() => null);
-      if (!member || !member.permissions.has(PermissionFlagsBits.Administrator)) {
-        res.status(403).send('このサーバーの管理者権限を持つアカウントでログインしてください。');
-        return;
-      }
-
-      // cookie-sessionはCookieの中身がそのままセッションなので、内容を丸ごと入れ替えることで
-      // ログイン前のCookie値を無効化する(express-sessionのregenerate相当)
-      req.session = { userId: user.id, username: user.username };
-      res.redirect('/');
-    } catch (error) {
-      console.error('[web] OAuth2ログインに失敗しました', error);
-      res.status(500).send('ログインに失敗しました。時間をおいて再度お試しください。');
-    }
+    req.session = { userId: entry.userId, username: entry.username };
+    res.redirect('/');
   });
 
   app.get('/logout', (req, res) => {
